@@ -17,18 +17,114 @@ package ascon_pkg is
 	function ascon_ps_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_pl_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_p_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
+	function ascon_f_full(state: ascon_state_t; ad: std_ulogic_vector; l_ad: positive) return ascon_state_t;
+	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector;
 	
 end package ascon_pkg;
 
-package body ascon_pkg is
+package body ascon_pkg is 
+
+	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector is
+        	variable res : std_ulogic_vector(vec'length - 1 downto 0);
+        	constant n_bytes  : integer := vec'length/8;
+    		begin
+
+        		-- Check that vector length is actually byte aligned.
+        		assert (vec'length mod 8 = 0)
+            		report "Vector size must be in multiple of Bytes!" severity failure;
+
+        		-- Loop over every byte of vec and reorder it in res.
+        		for i in 0 to (n_bytes - 1) loop
+            			res(8*(i+1) - 1 downto 8*i) := vec(8*(n_bytes - i) - 1 downto 8*(n_bytes - i - 1));
+        		end loop;
+
+        	return res;
+    	end function reverse_byte;
+
+	function ascon_f_full (state: ascon_state_t; ad: std_ulogic_vector; l_ad: positive) return ascon_state_t is
+		variable tmp1: ascon_state_t := state;
+		variable tmp2: ascon_state_t;
+		variable ad_tmp: std_ulogic_vector(127 downto 0);
+		variable ad_w_l: natural := l_ad;
+		variable ad_words: natural := 0;
+		begin
+			tmp1(0) := reverse_byte(tmp1(0));
+			init: for j in 0 to 11 loop
+				tmp1 := ascon_p_f(tmp1,12,j);
+			end loop init;
+			tmp1(0) := reverse_byte(tmp1(0));
+			tmp1(1) := reverse_byte(tmp1(1));
+			tmp1(2) := reverse_byte(tmp1(2));
+			tmp1(3) := reverse_byte(tmp1(3));
+			tmp1(4) := reverse_byte(tmp1(4));
+			tmp1(3) := tmp1(3) xor reverse_byte(state(1));
+			tmp1(4) := tmp1(4) xor reverse_byte(state(2));
+			
+			
+			while ad_words /= l_ad loop
+				
+				ad_tmp := ad((ad'high - 128*ad_words) downto (ad'high - 128*(ad_words+1)+1));
+				ad_tmp := reverse_byte(ad_tmp);
+				
+				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+				ad_processing: for j in 0 to 7 loop
+					tmp1(0) := reverse_byte(tmp1(0));
+					tmp1(1) := reverse_byte(tmp1(1));
+					tmp1(2) := reverse_byte(tmp1(2));
+					tmp1(3) := reverse_byte(tmp1(3));
+					tmp1(4) := reverse_byte(tmp1(4));
+					tmp1 := ascon_p_f(tmp1,8,j);
+					tmp1(0) := reverse_byte(tmp1(0));
+					tmp1(1) := reverse_byte(tmp1(1));
+					tmp1(2) := reverse_byte(tmp1(2));
+					tmp1(3) := reverse_byte(tmp1(3));
+					tmp1(4) := reverse_byte(tmp1(4));
+				end loop ad_processing;
+				ad_words := ad_words + 1;
+			end loop;
+			ad_tmp := x"00000000000000000000000000000000";
+			if (ad'high-(128*ad_words) < 0) then
+				ad_tmp(127 downto 120) := "00000001";
+			else
+				ad_tmp(127 downto 127-(ad'high-(128*ad_words))-8) :=  ad((ad'high-(128*ad_words)) downto 0) & "00000001";
+			end if;
+			ad_tmp := reverse_byte(ad_tmp);
+			tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+			tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+			ad_processing_last: for j in 0 to 7 loop
+				tmp1(0) := reverse_byte(tmp1(0));
+				tmp1(1) := reverse_byte(tmp1(1));
+				tmp1(2) := reverse_byte(tmp1(2));
+				tmp1(3) := reverse_byte(tmp1(3));
+				tmp1(4) := reverse_byte(tmp1(4));
+				tmp1 := ascon_p_f(tmp1,8,j);
+				tmp1(0) := reverse_byte(tmp1(0));
+				tmp1(1) := reverse_byte(tmp1(1));
+				tmp1(2) := reverse_byte(tmp1(2));
+				tmp1(3) := reverse_byte(tmp1(3));
+				tmp1(4) := reverse_byte(tmp1(4));
+			end loop ad_processing_last;
+		return tmp1;
+	end function ascon_f_full;
 
 	function ascon_p_f (state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
-		variable tmp1,tmp2,tmp3: ascon_state_t := state;
+		variable tmp1: ascon_state_t;
 		begin
-			tmp1 := ascon_pc_f(state, rnd, i);
-			tmp2 := ascon_ps_f(tmp1);
-			tmp3 := ascon_pl_f(tmp2);
-		return tmp3;
+			tmp1(0) := reverse_byte(state(0));
+			tmp1(1) := reverse_byte(state(1));
+			tmp1(2) := reverse_byte(state(2));
+			tmp1(3) := reverse_byte(state(3));
+			tmp1(4) := reverse_byte(state(4));
+			tmp1 := ascon_pc_f(tmp1, rnd, i);
+			tmp1 := ascon_ps_f(tmp1);
+			tmp1 := ascon_pl_f(tmp1);
+			tmp1(0) := reverse_byte(tmp1(0));
+			tmp1(1) := reverse_byte(tmp1(1));
+			tmp1(2) := reverse_byte(tmp1(2));
+			tmp1(3) := reverse_byte(tmp1(3));
+			tmp1(4) := reverse_byte(tmp1(4));
+		return tmp1;
 	end function ascon_p_f;
 
 	function ascon_pc_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
