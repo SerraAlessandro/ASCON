@@ -48,15 +48,16 @@ package body ascon_pkg is
 		variable ad_w_l: natural := l_ad;
 		variable ad_words: natural := 0;
 		begin
-			tmp1(0) := reverse_byte(tmp1(0));
-			init: for j in 0 to 11 loop
-				tmp1 := ascon_p_f(tmp1,12,j);
-			end loop init;
-			tmp1(0) := reverse_byte(tmp1(0));
+--			tmp1(0) := reverse_byte(tmp1(0));
+			
 			tmp1(1) := reverse_byte(tmp1(1));
 			tmp1(2) := reverse_byte(tmp1(2));
 			tmp1(3) := reverse_byte(tmp1(3));
 			tmp1(4) := reverse_byte(tmp1(4));
+			init: for j in 0 to 11 loop
+				tmp1 := ascon_p_f(tmp1,12,j);
+			end loop init;
+
 			tmp1(3) := tmp1(3) xor reverse_byte(state(1));
 			tmp1(4) := tmp1(4) xor reverse_byte(state(2));
 			
@@ -69,17 +70,9 @@ package body ascon_pkg is
 				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
 				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
 				ad_processing: for j in 0 to 7 loop
-					tmp1(0) := reverse_byte(tmp1(0));
-					tmp1(1) := reverse_byte(tmp1(1));
-					tmp1(2) := reverse_byte(tmp1(2));
-					tmp1(3) := reverse_byte(tmp1(3));
-					tmp1(4) := reverse_byte(tmp1(4));
+
 					tmp1 := ascon_p_f(tmp1,8,j);
-					tmp1(0) := reverse_byte(tmp1(0));
-					tmp1(1) := reverse_byte(tmp1(1));
-					tmp1(2) := reverse_byte(tmp1(2));
-					tmp1(3) := reverse_byte(tmp1(3));
-					tmp1(4) := reverse_byte(tmp1(4));
+
 				end loop ad_processing;
 				ad_words := ad_words + 1;
 			end loop;
@@ -93,37 +86,21 @@ package body ascon_pkg is
 			tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
 			tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
 			ad_processing_last: for j in 0 to 7 loop
-				tmp1(0) := reverse_byte(tmp1(0));
-				tmp1(1) := reverse_byte(tmp1(1));
-				tmp1(2) := reverse_byte(tmp1(2));
-				tmp1(3) := reverse_byte(tmp1(3));
-				tmp1(4) := reverse_byte(tmp1(4));
+
 				tmp1 := ascon_p_f(tmp1,8,j);
-				tmp1(0) := reverse_byte(tmp1(0));
-				tmp1(1) := reverse_byte(tmp1(1));
-				tmp1(2) := reverse_byte(tmp1(2));
-				tmp1(3) := reverse_byte(tmp1(3));
-				tmp1(4) := reverse_byte(tmp1(4));
+
 			end loop ad_processing_last;
 		return tmp1;
 	end function ascon_f_full;
 
 	function ascon_p_f (state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
-		variable tmp1: ascon_state_t;
+		variable tmp1: ascon_state_t := state;
 		begin
-			tmp1(0) := reverse_byte(state(0));
-			tmp1(1) := reverse_byte(state(1));
-			tmp1(2) := reverse_byte(state(2));
-			tmp1(3) := reverse_byte(state(3));
-			tmp1(4) := reverse_byte(state(4));
+
 			tmp1 := ascon_pc_f(tmp1, rnd, i);
 			tmp1 := ascon_ps_f(tmp1);
 			tmp1 := ascon_pl_f(tmp1);
-			tmp1(0) := reverse_byte(tmp1(0));
-			tmp1(1) := reverse_byte(tmp1(1));
-			tmp1(2) := reverse_byte(tmp1(2));
-			tmp1(3) := reverse_byte(tmp1(3));
-			tmp1(4) := reverse_byte(tmp1(4));
+
 		return tmp1;
 	end function ascon_p_f;
 
