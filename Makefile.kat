@@ -24,9 +24,10 @@ SRC := $(wildcard $(SRCDIR)/*.c) $(TOP).c
 OBJ := $(patsubst %.c,$(BUILD)/%.o,$(notdir $(SRC)))
 DEPFILES := $(patsubst %.o,%.d,$(OBJ))
 
+CC := gcc
+CFLAGS += -march=native -O3
+CPPFLAGS += -I$(SRCDIR) -I$(C)/tests
 DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*.d
-CFLAGS := -march=native -O3
-CPPFLAGS := -I$(SRCDIR) -I$(C)/tests
 COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) -c -o $@
 
 $(KAT_PKG): $(KAT_TO_VHDL) $(KAT_FILE)
