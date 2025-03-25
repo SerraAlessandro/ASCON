@@ -17,7 +17,7 @@ package ascon_pkg is
 	function ascon_ps_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_pl_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_p_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
-	function ascon_f_full(state: ascon_state_t; ad: std_ulogic_vector; l_ad: positive; pl: std_ulogic_vector; l_pl: positive) return std_ulogic_vector;
+	function ascon_enc_f(state: ascon_state_t; ad: std_ulogic_vector;  pl: std_ulogic_vector) return std_ulogic_vector;
 	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector;
 	
 end package ascon_pkg;
@@ -41,7 +41,7 @@ package body ascon_pkg is
         	return res;
     	end function reverse_byte;
 
-	function ascon_f_full (state: ascon_state_t; ad: std_ulogic_vector; l_ad: positive; pl: std_ulogic_vector; l_pl: positive) return std_ulogic_vector is
+	function ascon_enc_f (state: ascon_state_t; ad: std_ulogic_vector; pl: std_ulogic_vector) return std_ulogic_vector is
 		variable tmp1: ascon_state_t := state;
 		variable tmp2: ascon_state_t;
 		variable ad_tmp, pl_tmp: std_ulogic_vector(127 downto 0);
@@ -65,7 +65,7 @@ package body ascon_pkg is
 			
 -- ******************** ASSOCIATED DATA ********************	
 		
-			while ad_words /= (l_ad-1) loop
+			while (ad'length - 128*ad_words > 128) loop
 				
 				ad_tmp := ad((ad'high - 128*ad_words) downto (ad'high - 128*(ad_words+1)+1));
 				ad_tmp := reverse_byte(ad_tmp);
@@ -108,7 +108,7 @@ package body ascon_pkg is
 
 -- ******************** PLAINTEXT ********************
 
-			while (pl_words /= (l_pl - 1)) loop
+			while (pl'length - 128*pl_words > 128) loop
 				
 				pl_tmp := pl((pl'high - 128*pl_words) downto (pl'high - 128*(pl_words+1)+1));
 				pl_tmp := reverse_byte(pl_tmp);
@@ -146,6 +146,7 @@ package body ascon_pkg is
 			tmp1(1) := tmp1(1) xor pl_tmp(127 downto 64);
 
 -- ******************** FINALIZATION ********************
+
 			tmp1(2) := tmp1(2) xor reverse_byte(state(1));
 			tmp1(3) := tmp1(3) xor reverse_byte(state(2));
 
@@ -158,10 +159,8 @@ package body ascon_pkg is
 
 			T := reverse_byte(T);
 			
-
-			
 		return T;
-	end function ascon_f_full;
+	end function ascon_enc_f;
 
 	function ascon_p_f (state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
 		variable tmp1: ascon_state_t := state;
