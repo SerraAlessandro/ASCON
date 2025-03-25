@@ -1,0 +1,54 @@
+C := C
+KAT_PKG := vhdl/kat_pkg.vhd
+.DEFAULT_GOAL := $(KAT_PKG)
+
+ifeq ($(wildcard $(C)),)
+
+$(KAT_PKG):
+	git submodule init
+	git submodule update
+	$(MAKE) -f Makefile.kat
+
+else
+
+BUILD := build
+SCRIPTS := scripts
+SRCDIR := $(C)/crypto_aead/asconaead128/ref
+VPATH := $(SRCDIR):$(C)/tests
+
+KAT_TO_VHDL := $(SCRIPTS)/kat_to_vhdl.awk
+KAT_FILE := $(BUILD)/LWC_AEAD_KAT_128_128.txt
+
+TOP := genkat_aead
+SRC := $(wildcard $(SRCDIR)/*.c) $(TOP).c
+OBJ := $(patsubst %.c,$(BUILD)/%.o,$(notdir $(SRC)))
+DEPFILES := $(patsubst %.o,%.d,$(OBJ))
+
+DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*.d
+CFLAGS := -march=native -O3
+CPPFLAGS := -I$(SRCDIR) -I$(C)/tests
+COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) -c -o $@
+
+$(KAT_PKG): $(KAT_TO_VHDL) $(KAT_FILE)
+	awk -f $< $(KAT_FILE) > $@
+
+$(KAT_FILE): $(BUILD)/$(TOP)
+	cd $(BUILD); ./$(TOP)
+
+$(BUILD)/$(TOP): $(OBJ)
+	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+
+%.o: %.c
+
+$(OBJ): $(BUILD)/%.o: %.c $(BUILD)/%.d | $(BUILD)
+	$(COMPILE.c) $<
+	touch $@
+
+$(DEPFILES):
+
+$(BUILD):
+	mkdir -p $@
+
+include $(wildcard $(DEPFILES))
+
+endif
