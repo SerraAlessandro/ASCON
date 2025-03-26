@@ -3,9 +3,9 @@ use ieee.std_logic_1164.all;
  
 package ascon_pkg is
 
-	subtype w8_t is std_ulogic_vector(7 downto 0);
+	subtype w8_t is std_ulogic_vector(0 to 7);
 	type w8_array_t is array(natural range <>) of w8_t;
-	subtype w64_t is std_ulogic_vector(63 downto 0);
+	subtype w64_t is std_ulogic_vector(0 to 63);
 	type w64_array_t is array(natural range <>) of w64_t;
 	subtype ascon_state_t is w64_array_t(0 to 4);
 
@@ -25,7 +25,8 @@ end package ascon_pkg;
 package body ascon_pkg is 
 
 	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector is
-        	variable res : std_ulogic_vector(vec'length - 1 downto 0);
+        	--variable res : std_ulogic_vector(vec'length - 1 downto 0);
+		variable res : std_ulogic_vector(0 to vec'length-1);
         	constant n_bytes  : integer := vec'length/8;
     		begin
 
@@ -35,7 +36,8 @@ package body ascon_pkg is
 
         		-- Loop over every byte of vec and reorder it in res.
         		for i in 0 to (n_bytes - 1) loop
-            			res(8*(i+1) - 1 downto 8*i) := vec(8*(n_bytes - i) - 1 downto 8*(n_bytes - i - 1));
+            			--res(8*(i+1) - 1 downto 8*i) := vec(8*(n_bytes - i) - 1 downto 8*(n_bytes - i - 1));
+				res(8*i to (8*(i+1)) -1) := vec(8*(n_bytes-1-i) to (8*(n_bytes-i))-1);
         		end loop;
 
         	return res;
@@ -44,34 +46,35 @@ package body ascon_pkg is
 	function ascon_enc_f (state: ascon_state_t; ad: std_ulogic_vector; pl: std_ulogic_vector) return std_ulogic_vector is
 		variable tmp1: ascon_state_t := state;
 		variable tmp2: ascon_state_t;
-		variable ad_tmp, pl_tmp: std_ulogic_vector(127 downto 0);
+		variable ad_tmp, pl_tmp: std_ulogic_vector(0 to 127);
 		variable ad_words,pl_words: natural := 0;
-		variable T: std_ulogic_vector(127 downto 0);
+		variable T: std_ulogic_vector(0 to 127);
 	
 		begin
+			
+			
 
 -- ******************** INITIALIZATION ********************
 			
-			tmp1(1) := reverse_byte(tmp1(1));
-			tmp1(2) := reverse_byte(tmp1(2));
-			tmp1(3) := reverse_byte(tmp1(3));
-			tmp1(4) := reverse_byte(tmp1(4));
+			
+		
 			init: for j in 0 to 11 loop
 				tmp1 := ascon_p_f(tmp1,12,j);
 			end loop init;
 
-			tmp1(3) := tmp1(3) xor reverse_byte(state(1));
-			tmp1(4) := tmp1(4) xor reverse_byte(state(2));
+			tmp1(3) := tmp1(3) xor state(1);
+			tmp1(4) := tmp1(4) xor state(2);
+
+			
 			
 -- ******************** ASSOCIATED DATA ********************	
 		
 			while (ad'length - 128*ad_words > 128) loop
 				
-				ad_tmp := ad((ad'high - 128*ad_words) downto (ad'high - 128*(ad_words+1)+1));
-				ad_tmp := reverse_byte(ad_tmp);
+				ad_tmp := ad(ad'length-(128*(ad_words+1)) to ad'length-(128*ad_words)-1);
+				tmp1(0) := tmp1(0) xor ad_tmp(64 to 127);
+				tmp1(1) := tmp1(1) xor ad_tmp(0 to 63);
 				
-				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
-				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
 				ad_processing: for j in 0 to 7 loop
 
 					tmp1 := ascon_p_f(tmp1,8,j);
@@ -81,41 +84,42 @@ package body ascon_pkg is
 			end loop;
 
 			if (ad'high +1 -(128*(ad_words+1)) = 0) then
-				ad_tmp := ad((ad'high - 128*(ad_words)) downto 0);
-				ad_tmp := reverse_byte(ad_tmp);
-				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
-				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+				ad_tmp := ad(ad'length-(128*(ad_words+1)) to ad'length-(128*ad_words)-1);
+				
+				tmp1(0) := tmp1(0) xor ad_tmp(64 to 127);
+				tmp1(1) := tmp1(1) xor ad_tmp(0 to 63);
 
 				ad_processing_last_full: for j in 0 to 7 loop
 					tmp1 := ascon_p_f(tmp1,8,j);
 				end loop ad_processing_last_full;
 				
-				ad_tmp := x"00000000000000000000000000000000";
-				ad_tmp(127 downto 120) := "00000001";
+				ad_tmp := x"00000000000000000000000000000001";
 				
 			else
 				ad_tmp := x"00000000000000000000000000000000";
-				ad_tmp(127 downto 127-(ad'high-(128*ad_words))-8) :=  ad((ad'high-(128*ad_words)) downto 0) & "00000001";
+				ad_tmp(128-(ad'length-(128*ad_words)+8) to 127) := "00000001" & ad(0 to ad'length-(128*ad_words)-1) ;
+				
 			end if;
-			ad_tmp := reverse_byte(ad_tmp);
-			tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
-			tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+
+			
+			tmp1(0) := tmp1(0) xor ad_tmp(64 to 127);
+			tmp1(1) := tmp1(1) xor ad_tmp(0 to 63);
 			ad_processing_last: for j in 0 to 7 loop
 				tmp1 := ascon_p_f(tmp1,8,j);
 			end loop ad_processing_last;
 	
-			tmp1(4)(63) := tmp1(4)(63) xor '1';
+			tmp1(4)(0) := tmp1(4)(0) xor '1';
 
--- ******************** PLAINTEXT ********************
+			
+		
+
+---- ******************** PLAINTEXT ********************
 
 			while (pl'length - 128*pl_words > 128) loop
+				pl_tmp := pl(pl'length-(128*(pl_words+1)) to pl'length-(128*pl_words)-1);
+				tmp1(0) := tmp1(0) xor pl_tmp(64 to 127);
+				tmp1(1) := tmp1(1) xor pl_tmp(0 to 63);
 				
-				pl_tmp := pl((pl'high - 128*pl_words) downto (pl'high - 128*(pl_words+1)+1));
-				pl_tmp := reverse_byte(pl_tmp);
-				
-				tmp1(0) := tmp1(0) xor pl_tmp(63 downto 0);
-				tmp1(1) := tmp1(1) xor pl_tmp(127 downto 64);
-
 				pl_processing: for j in 0 to 7 loop
 
 					tmp1 := ascon_p_f(tmp1,8,j);
@@ -124,38 +128,39 @@ package body ascon_pkg is
 				pl_words := pl_words + 1;
 			end loop;
 
-			if (pl'high-(128*(pl_words+1) + 1) = 0) then
-				pl_tmp := pl((pl'high - 128*(pl_words)) downto 0);
-				pl_tmp := reverse_byte(pl_tmp);
-				tmp1(0) := tmp1(0) xor pl_tmp(63 downto 0);
-				tmp1(1) := tmp1(1) xor pl_tmp(127 downto 64);
+			if (pl'high +1 -(128*(pl_words+1)) = 0) then
+				pl_tmp := pl(pl'length-(128*(pl_words+1)) to pl'length-(128*pl_words)-1);
+				
+				tmp1(0) := tmp1(0) xor pl_tmp(64 to 127);
+				tmp1(1) := tmp1(1) xor pl_tmp(0 to 63);
 
 				pl_processing_last_full: for j in 0 to 7 loop
 					tmp1 := ascon_p_f(tmp1,8,j);
 				end loop pl_processing_last_full;
 				
-				pl_tmp := x"00000000000000000000000000000000";
-				pl_tmp(127 downto 120) := "00000001";
-				
+				pl_tmp := x"00000000000000000000000000000001";
+			
 			else
 				pl_tmp := x"00000000000000000000000000000000";
-				pl_tmp(127 downto 127-(pl'high-(128*pl_words))-8) :=  pl((pl'high-(128*pl_words)) downto 0) & "00000001";
+				pl_tmp(128-(pl'length-(128*pl_words)+8) to 127) := "00000001" & pl(0 to pl'length-(128*pl_words)-1) ;
 			end if;
-			pl_tmp := reverse_byte(pl_tmp);
-			tmp1(0) := tmp1(0) xor pl_tmp(63 downto 0);
-			tmp1(1) := tmp1(1) xor pl_tmp(127 downto 64);
 
--- ******************** FINALIZATION ********************
+			tmp1(0) := tmp1(0) xor pl_tmp(64 to 127);
+			tmp1(1) := tmp1(1) xor pl_tmp(0 to 63);
 
-			tmp1(2) := tmp1(2) xor reverse_byte(state(1));
-			tmp1(3) := tmp1(3) xor reverse_byte(state(2));
+			
+
+---- ******************** FINALIZATION ********************
+
+			tmp1(2) := tmp1(2) xor state(1);
+			tmp1(3) := tmp1(3) xor state(2);
 
 			fin: for j in 0 to 11 loop
 				tmp1 := ascon_p_f(tmp1,12,j);
 			end loop fin;
 
-			T(63 downto 0) := tmp1(3) xor reverse_byte(state(1));
-			T(127 downto 64) := tmp1(4) xor reverse_byte(state(2));
+			T(64 to 127) := tmp1(3) xor state(1);
+			T(0 to 63) := tmp1(4) xor state(2);
 
 			T := reverse_byte(T);
 			
@@ -177,7 +182,7 @@ package body ascon_pkg is
 		variable tmp: ascon_state_t := state;
 		begin
 			assert i < rnd severity failure;
-			tmp(2)(7 downto 0) := state(2)(7 downto 0) xor ascon_const_c(16 - rnd + i);
+			tmp(2)(56 to 63) := state(2)(56 to 63) xor ascon_const_c(16 - rnd + i);
 		return tmp;
 	end function ascon_pc_f;
 	
@@ -229,11 +234,11 @@ package body ascon_pkg is
 			x3 := state(3);
 			x4 := state(4);
 			
-			x0 := x0 XOR (x0(18 DOWNTO 0) & x0(63 DOWNTO 19)) XOR (x0(27 DOWNTO 0) & x0(63 DOWNTO 28));
-         		x1 := x1 XOR (x1(60 DOWNTO 0) & x1(63 DOWNTO 61)) XOR (x1(38 DOWNTO 0) & x1(63 DOWNTO 39));
-			x2 := x2 XOR (x2(0 DOWNTO 0) & x2(63 DOWNTO 1)) XOR (x2(5 DOWNTO 0) & x2(63 DOWNTO 6));
-			x3 := x3 XOR (x3(9 DOWNTO 0) & x3(63 DOWNTO 10)) XOR (x3(16 DOWNTO 0) & x3(63 DOWNTO 17));
-			x4 := x4 XOR (x4(6 DOWNTO 0) & x4(63 DOWNTO 7)) XOR (x4(40 DOWNTO 0) & x4(63 DOWNTO 41));
+			x0 := x0 XOR (x0(45 to 63) & x0(0 to 44)) XOR (x0(36 to 63) & x0(0 to 35));
+         		x1 := x1 XOR (x1(3 to 63) & x1(0 to 2)) XOR (x1(25 to 63) & x1(0 to 24));
+			x2 := x2 XOR (x2(63 to 63) & x2(0 to 62)) XOR (x2(58 to 63) & x2(0 to 57));
+			x3 := x3 XOR (x3(54 to 63) & x3(0 to 53)) XOR (x3(47 to 63) & x3(0 to 46));
+			x4 := x4 XOR (x4(57 to 63) & x4(0 to 56)) XOR (x4(23 to 63) & x4(0 to 22));
 			
 			tmp(0) := x0;
 			tmp(1) := x1;
