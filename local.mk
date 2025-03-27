@@ -3,11 +3,10 @@ SIM  := ghdl
 GUI  := no
 V    := 1
 
-KAT_PKG := $(VHDL)/kat_pkg.vhd
+KAT_STIM := $(TOP)/build/stim.txt
 
-ascon_pkg_sim.sim: $(KAT_PKG)
+ascon_pkg_sim.sim: $(KAT_STIM)
+ascon_pkg_sim.sim: GHDLRFLAGS += -gkat_file_name=$(KAT_STIM)
 
-.PHONY: $(KAT_PKG)
-
-$(KAT_PKG):
+$(KAT_STIM):
 	$(MAKE) -C $(TOP) -f Makefile.kat

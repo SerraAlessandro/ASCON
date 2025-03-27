@@ -1,24 +1,23 @@
 C := C
-KAT_PKG := vhdl/kat_pkg.vhd
-.DEFAULT_GOAL := $(KAT_PKG)
+BUILD := build
+KAT_STIM := $(BUILD)/stim.txt
+.DEFAULT_GOAL := $(KAT_STIM)
 
 ifeq ($(wildcard $(C)),)
 
-$(KAT_PKG):
+$(KAT_STIM):
 	git submodule init
 	git submodule update
 	$(MAKE) -f Makefile.kat
 
 else
 
-BUILD := build
 SCRIPTS := scripts
 SRCDIR := $(C)/crypto_aead/asconaead128/ref
 VPATH := $(SRCDIR):$(C)/tests
 
-KAT_TO_VHDL := $(SCRIPTS)/kat_to_vhdl.awk
+KAT_TO_STIM := $(SCRIPTS)/kat_to_stim.awk
 KAT_FILE := $(BUILD)/LWC_AEAD_KAT_128_128.txt
-
 TOP := genkat_aead
 SRC := $(wildcard $(SRCDIR)/*.c) $(TOP).c
 OBJ := $(patsubst %.c,$(BUILD)/%.o,$(notdir $(SRC)))
@@ -30,7 +29,7 @@ CPPFLAGS += -I$(SRCDIR) -I$(C)/tests
 DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*.d
 COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) -c -o $@
 
-$(KAT_PKG): $(KAT_TO_VHDL) $(KAT_FILE)
+$(KAT_STIM): $(KAT_TO_STIM) $(KAT_FILE)
 	awk -f $< $(KAT_FILE) > $@
 
 $(KAT_FILE): $(BUILD)/$(TOP)
