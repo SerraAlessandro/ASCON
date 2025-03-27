@@ -13,11 +13,18 @@ package ascon_pkg is
     x"3c", x"2d", x"1e", x"0f", x"f0", x"e1", x"d2", x"c3", x"b4", x"a5", x"96", x"87", x"78", x"69", x"5a", x"4b"
 	);
 
+	subtype w128_t is std_ulogic_vector(0 to 127);
+	type ascon_enc_out_t is record
+	c: std_ulogic_vector; -- ciphertext
+	t: w128_t; -- tag
+	end record;
+
+
 	function ascon_pc_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
 	function ascon_ps_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_pl_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_p_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
-	function ascon_enc_f(state: ascon_state_t; ad: std_ulogic_vector;  pl: std_ulogic_vector) return std_ulogic_vector;
+	function ascon_enc_f(state: ascon_state_t; ad: std_ulogic_vector;  pl: std_ulogic_vector) return ascon_enc_out_t;
 	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector;
 	
 end package ascon_pkg;
@@ -43,12 +50,23 @@ package body ascon_pkg is
         	return res;
     	end function reverse_byte;
 
-	function ascon_enc_f (state: ascon_state_t; ad: std_ulogic_vector; pl: std_ulogic_vector) return std_ulogic_vector is
+	function ascon_enc_f (state: ascon_state_t; ad: std_ulogic_vector; pl: std_ulogic_vector) return ascon_enc_out_t is
+
+		constant a_len: natural := ad'length;
+		constant a_local: std_ulogic_vector(0 to a_len - 1) := ad;
+		constant p_len: natural := pl'length;
+		constant p_local: std_ulogic_vector(0 to p_len - 1) := pl;
+
 		variable tmp1: ascon_state_t := state;
-		variable tmp2: ascon_state_t;
+		variable tmp12: std_ulogic_vector(0 to 127);
 		variable ad_tmp, pl_tmp: std_ulogic_vector(0 to 127);
 		variable ad_words,pl_words: natural := 0;
 		variable T: std_ulogic_vector(0 to 127);
+		variable res: ascon_enc_out_t(c(0 to p_len - 1)) := (
+     				c => (others => '0'),
+     				t => (others => '0')
+   				);
+
 	
 		begin
 			
@@ -56,22 +74,18 @@ package body ascon_pkg is
 
 -- ******************** INITIALIZATION ********************
 			
-			
-		
 			init: for j in 0 to 11 loop
 				tmp1 := ascon_p_f(tmp1,12,j);
 			end loop init;
 
 			tmp1(3) := tmp1(3) xor state(1);
 			tmp1(4) := tmp1(4) xor state(2);
-
-			
 			
 -- ******************** ASSOCIATED DATA ********************	
 		
-			while (ad'length - 128*ad_words > 128) loop
+			while (a_len - 128*ad_words > 128) loop
 				
-				ad_tmp := ad(ad'length-(128*(ad_words+1)) to ad'length-(128*ad_words)-1);
+				ad_tmp := a_local(a_len-(128*(ad_words+1)) to a_len-(128*ad_words)-1);
 				tmp1(0) := tmp1(0) xor ad_tmp(64 to 127);
 				tmp1(1) := tmp1(1) xor ad_tmp(0 to 63);
 				
@@ -83,8 +97,8 @@ package body ascon_pkg is
 				ad_words := ad_words + 1;
 			end loop;
 
-			if (ad'high +1 -(128*(ad_words+1)) = 0) then
-				ad_tmp := ad(ad'length-(128*(ad_words+1)) to ad'length-(128*ad_words)-1);
+			if (a_len -(128*(ad_words+1)) = 0) then
+				ad_tmp := a_local(a_len-(128*(ad_words+1)) to a_len-(128*ad_words)-1);
 				
 				tmp1(0) := tmp1(0) xor ad_tmp(64 to 127);
 				tmp1(1) := tmp1(1) xor ad_tmp(0 to 63);
@@ -97,7 +111,7 @@ package body ascon_pkg is
 				
 			else
 				ad_tmp := x"00000000000000000000000000000000";
-				ad_tmp(128-(ad'length-(128*ad_words)+8) to 127) := "00000001" & ad(0 to ad'length-(128*ad_words)-1) ;
+				ad_tmp(128-(a_len-(128*ad_words)+8) to 127) := "00000001" & a_local(0 to a_len-(128*ad_words)-1) ;
 				
 			end if;
 
@@ -110,15 +124,13 @@ package body ascon_pkg is
 	
 			tmp1(4)(0) := tmp1(4)(0) xor '1';
 
-			
-		
+-- ******************** PLAINTEXT ********************
 
----- ******************** PLAINTEXT ********************
-
-			while (pl'length - 128*pl_words > 128) loop
-				pl_tmp := pl(pl'length-(128*(pl_words+1)) to pl'length-(128*pl_words)-1);
+			while (p_len - 128*pl_words > 128) loop
+				pl_tmp := p_local(p_len-(128*(pl_words+1)) to p_len-(128*pl_words)-1);
 				tmp1(0) := tmp1(0) xor pl_tmp(64 to 127);
 				tmp1(1) := tmp1(1) xor pl_tmp(0 to 63);
+				res.c(p_len-(128*(pl_words+1)) to p_len-(128*pl_words)-1) := tmp1(1) & tmp1(0);
 				
 				pl_processing: for j in 0 to 7 loop
 
@@ -128,11 +140,12 @@ package body ascon_pkg is
 				pl_words := pl_words + 1;
 			end loop;
 
-			if (pl'high +1 -(128*(pl_words+1)) = 0) then
-				pl_tmp := pl(pl'length-(128*(pl_words+1)) to pl'length-(128*pl_words)-1);
+			if (p_len -(128*(pl_words+1)) = 0) then
+				pl_tmp := p_local(p_len-(128*(pl_words+1)) to p_len-(128*pl_words)-1);
 				
 				tmp1(0) := tmp1(0) xor pl_tmp(64 to 127);
 				tmp1(1) := tmp1(1) xor pl_tmp(0 to 63);
+				res.c(p_len-(128*(pl_words+1)) to p_len-(128*pl_words)-1) := tmp1(1) & tmp1(0);
 
 				pl_processing_last_full: for j in 0 to 7 loop
 					tmp1 := ascon_p_f(tmp1,8,j);
@@ -142,15 +155,15 @@ package body ascon_pkg is
 			
 			else
 				pl_tmp := x"00000000000000000000000000000000";
-				pl_tmp(128-(pl'length-(128*pl_words)+8) to 127) := "00000001" & pl(0 to pl'length-(128*pl_words)-1) ;
+				pl_tmp(128-(p_len-(128*pl_words)+8) to 127) := "00000001" & p_local(0 to p_len-(128*pl_words)-1) ;
 			end if;
 
 			tmp1(0) := tmp1(0) xor pl_tmp(64 to 127);
 			tmp1(1) := tmp1(1) xor pl_tmp(0 to 63);
+			tmp12 := tmp1(1) & tmp1(0);
+			res.c(0 to  p_len-(128*pl_words)-1) := tmp12(128-(p_len-(128*pl_words)) to 127);
 
-			
-
----- ******************** FINALIZATION ********************
+-- ******************** FINALIZATION ********************
 
 			tmp1(2) := tmp1(2) xor state(1);
 			tmp1(3) := tmp1(3) xor state(2);
@@ -162,9 +175,12 @@ package body ascon_pkg is
 			T(64 to 127) := tmp1(3) xor state(1);
 			T(0 to 63) := tmp1(4) xor state(2);
 
-			T := reverse_byte(T);
+--			T := reverse_byte(T);
+--			res.c := reverse_byte(res.c);
 			
-		return T;
+			res.t := T;
+
+		return res;
 	end function ascon_enc_f;
 
 	function ascon_p_f (state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
