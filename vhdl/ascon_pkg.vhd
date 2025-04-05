@@ -18,6 +18,10 @@ package ascon_pkg is
 	c: std_ulogic_vector; -- ciphertext
 	t: w128_t; -- tag
 	end record;
+	type ascon_dec_out_t is record
+	p: std_ulogic_vector;
+	t: w128_t;
+	end record;
 
 
 	function ascon_pc_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
@@ -25,7 +29,7 @@ package ascon_pkg is
 	function ascon_pl_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_p_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
 	function ascon_enc_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; pl: std_ulogic_vector) return ascon_enc_out_t;
---	function ascon_enc_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; pl: std_ulogic_vector) return ascon_state_t;
+	function ascon_dec_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; ci: std_ulogic_vector) return ascon_dec_out_t;
 	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector;
 	
 end package ascon_pkg;
@@ -52,7 +56,6 @@ package body ascon_pkg is
     	end function reverse_byte;
 
 	function ascon_enc_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; pl: std_ulogic_vector) return ascon_enc_out_t is
---	function ascon_enc_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; pl: std_ulogic_vector) return ascon_state_t is
 
 		constant a_len: natural := ad'length;
 		constant a_local: std_ulogic_vector(a_len - 1 downto 0) := ad;
@@ -175,6 +178,133 @@ package body ascon_pkg is
 		return res;
 
 	end function ascon_enc_f;
+
+
+	function ascon_dec_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; ci: std_ulogic_vector) return ascon_dec_out_t is
+		constant a_len: natural := ad'length;
+		constant a_local: std_ulogic_vector(a_len - 1 downto 0) := ad;
+		constant c_len: natural := ci'length;
+		constant c_local: std_ulogic_vector(c_len - 1 downto 0) := ci;
+		constant k_len: natural := key'length;
+		constant k_local: std_ulogic_vector(k_len - 1 downto 0) := key;
+		constant n_len: natural := nonce'length;
+		constant n_local: std_ulogic_vector(n_len - 1 downto 0) := nonce;
+		constant iv: std_ulogic_vector(63 downto 0) := x"00001000808c0001";
+
+		variable state: ascon_state_t;
+		variable tmp1: ascon_state_t;
+		variable k,n: w128_t;
+		variable tmp12: w128_t;
+		variable ad_tmp, ci_tmp: w128_t;
+		variable ad_words,ci_words: natural := 0;
+		variable T: w128_t;
+		variable res: ascon_dec_out_t(p(c_len - 1 downto 0)) := (p => (others => '0'),t => (others => '0'));
+
+		begin
+			
+			state(0) := iv;
+			state(1) := k_local(63 downto 0);
+			state(2) := k_local(127 downto 64);
+			state(3) := n_local(63 downto 0);
+			state(4) := n_local(127 downto 64);
+			tmp1 := state;
+			
+-- ******************** INITIALIZATION ********************
+			
+			init: for j in 0 to 11 loop
+				tmp1 := ascon_p_f(tmp1,12,j);
+			end loop init;
+
+			tmp1(3) := tmp1(3) xor state(1);
+			tmp1(4) := tmp1(4) xor state(2);
+
+-- ******************** ASSOCIATED DATA ********************	
+
+			while (a_len - 128*ad_words > 128) loop
+				ad_tmp := ad((128*(ad_words+1))-1 downto 128*ad_words);
+				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+				ad_processing: for j in 0 to 7 loop
+					tmp1 := ascon_p_f(tmp1,8,j);
+				end loop ad_processing;
+				ad_words := ad_words + 1;
+			end loop;
+
+			if (a_len -(128*(ad_words+1)) = 0) then
+				ad_tmp := ad((128*(ad_words+1))-1 downto 128*ad_words);
+				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+				ad_processing_last_full: for j in 0 to 7 loop
+					tmp1 := ascon_p_f(tmp1,8,j);
+				end loop ad_processing_last_full;
+				ad_tmp := x"00000000000000000000000000000001";
+			else
+				ad_tmp := x"00000000000000000000000000000000";
+				ad_tmp(8 + a_len - 1 - 128*ad_words downto 0) := x"01" & ad(a_len - 1 downto 128*ad_words);
+			end if;
+
+			tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+			tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+
+			ad_processing_last: for j in 0 to 7 loop
+				tmp1 := ascon_p_f(tmp1,8,j);
+			end loop ad_processing_last;
+	
+			tmp1(4)(63) := tmp1(4)(63) xor '1';
+		
+-- ******************** CYPHERTEXT ********************
+	
+			while (c_len - 128*ci_words > 128) loop
+				ci_tmp := ci((128*(ci_words+1))-1 downto 128*ci_words);
+				res.p((128*(ci_words+1))-1 downto 128*ci_words) := (tmp1(1) xor ci_tmp(127 downto 64)) & (tmp1(0) xor ci_tmp(63 downto 0));
+				tmp1(0) := ci_tmp(63 downto 0);
+				tmp1(1) := ci_tmp(127 downto 64);
+				ci_processing: for j in 0 to 7 loop
+					tmp1 := ascon_p_f(tmp1,8,j);
+				end loop ci_processing;
+				ci_words := ci_words + 1;
+			end loop;
+
+			if (c_len -(128*(ci_words+1)) = 0) then
+				ci_tmp := ci((128*(ci_words+1))-1 downto 128*ci_words);
+				res.p((128*(ci_words+1))-1 downto 128*ci_words) := (tmp1(1) xor ci_tmp(127 downto 64)) & (tmp1(0) xor ci_tmp(63 downto 0));
+				tmp1(0) := ci_tmp(63 downto 0);
+				tmp1(1) := ci_tmp(127 downto 64);
+				ci_processing_last_full: for j in 0 to 7 loop
+					tmp1 := ascon_p_f(tmp1,8,j);
+				end loop ci_processing_last_full;
+				ci_tmp := x"00000000000000000000000000000001";
+				tmp1(0) := tmp1(0) xor ci_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor ci_tmp(127 downto 64);
+			else
+				ci_tmp := x"00000000000000000000000000000000";
+				ci_tmp(8 + c_len - 1 - 128*ci_words downto 0) := x"01" & ci(c_len - 1 downto 128*ci_words);
+				tmp1(0) := tmp1(0) xor ci_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor ci_tmp(127 downto 64);
+				tmp12 := tmp1(1) & tmp1(0);
+				res.p(c_len-1 downto 128*ci_words) := tmp12(c_len-1-128*ci_words downto 0);
+				tmp12(c_len-1-128*ci_words downto 0) := ci_tmp(c_len - 1 - 128*ci_words downto 0);
+				tmp1(0) := tmp12(63 downto 0);
+				tmp1(1) := tmp12(127 downto 64);
+			end if;
+
+---- ******************** FINALIZATION ********************
+
+			tmp1(2) := tmp1(2) xor state(1);
+			tmp1(3) := tmp1(3) xor state(2);
+
+			fin: for j in 0 to 11 loop
+				tmp1 := ascon_p_f(tmp1,12,j);
+			end loop fin;
+			
+			T(63 downto 0) := tmp1(3) xor state(1);
+			T(127 downto 64) := tmp1(4) xor state(2);
+
+			res.t := T;
+		
+		return res;
+
+	end function ascon_dec_f;
 
 
 	function ascon_p_f (state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
