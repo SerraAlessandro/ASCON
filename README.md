@@ -55,8 +55,9 @@ plaintext:  5A5667453F54DAFE3D65DE2C436512B45AB4FE
 So they both need to be byte reversed:  
 tag_rev:        E11A76B1067C168FDE2A1BDDDCAD3258  
 plaintext_rev:  FEB45AB41265432CDE653DFEDA543F4567565A
-
+```
 ## In VHDL:
+```
 ad <= x"45bc627ad055be54fa4393fed679041245bc627ad055beb5fa4397fed9790ac234be6f12a08c";
 pl <= x"feb45ab41265432cde653dfeda543f4567565a";
 key <= x"abc5472b56742bca3675cbef47956338";
