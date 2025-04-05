@@ -54,7 +54,22 @@ plaintext:  5A5667453F54DAFE3D65DE2C436512B45AB4FE
 
 So they both need to be byte reversed:  
 tag_rev:        E11A76B1067C168FDE2A1BDDDCAD3258  
-plaintext_rev:  FEB45AB41265432CDE653DFEDA543F4567565A  
+plaintext_rev:  FEB45AB41265432CDE653DFEDA543F4567565A
+
+In VHDL:
+k_Rev <= reverse_byte(key);
+n_rev <= reverse_byte(nonce);
+ad_rev <= reverse_byte(ad);
+pl_rev <= reverse_byte(pl);
+	
+T_enc <= reverse_byte(ascon_enc_f(k_rev,n_rev,ad_rev,pl_rev).t);
+c_int <= ascon_enc_f(k_rev,n_rev,ad_rev,pl_rev).c;
+
+T_dec <= reverse_byte(ascon_dec_f(k_rev,n_rev,ad_rev,c_int).t);
+received <= reverse_byte(ascon_dec_f(k_rev,n_rev,ad_rev,c_int).p);
+
+C <= reverse_byte(c_int);
+
 ```
 
 
