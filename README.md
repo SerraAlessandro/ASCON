@@ -56,7 +56,12 @@ So they both need to be byte reversed:
 tag_rev:        E11A76B1067C168FDE2A1BDDDCAD3258  
 plaintext_rev:  FEB45AB41265432CDE653DFEDA543F4567565A
 
-In VHDL:
+## In VHDL:
+ad <= x"45bc627ad055be54fa4393fed679041245bc627ad055beb5fa4397fed9790ac234be6f12a08c";
+pl <= x"feb45ab41265432cde653dfeda543f4567565a";
+key <= x"abc5472b56742bca3675cbef47956338";
+nonce <= x"2c66b325ae354f7804658cdfe43645af";
+
 k_Rev <= reverse_byte(key);
 n_rev <= reverse_byte(nonce);
 ad_rev <= reverse_byte(ad);
