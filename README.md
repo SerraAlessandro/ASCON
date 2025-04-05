@@ -17,7 +17,7 @@ Known Answer Tests results should be in `build/build/LWC_AEAD_KAT_128_128.txt`
 
 
 ## Using ascon_enc_f and ascon_dec_f
-<pre>
+```
 In order to be consistent with the official implementation, the key, nonce, associated data and plaintext need to be byte reversed, so, if the official python implementation provides this result:  
 key:        0xabc5472b56742bca3675cbef47956338 (16 bytes)  
 nonce:      0x2c66b325ae354f7804658cdfe43645af (16 bytes)  
@@ -55,7 +55,7 @@ plaintext:  5A5667453F54DAFE3D65DE2C436512B45AB4FE
 So they both need to be byte reversed:  
 tag_rev:        E11A76B1067C168FDE2A1BDDDCAD3258  
 plaintext_rev:  FEB45AB41265432CDE653DFEDA543F4567565A  
-</pre>
+```
 
 
 
