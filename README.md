@@ -98,3 +98,5 @@ received <= reverse_byte(ascon_dec_f(k_rev,n_rev,ad_rev,c_int).p);
 
 C <= reverse_byte(c_int);
 ```
+## Encryption hardware schematics
+![encryption schematics](encryption_schematics.jpg)
