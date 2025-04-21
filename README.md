@@ -146,5 +146,9 @@ Address | Byte Written
 ```
 By reading it from address 0x20, it is already in the correct format.
 
+## Axi_slave_write schematics
+![axi_slave_write schematics](axi_slave_write_schematics)
+## Axi_slave_write state diagram
+![axi_slave_write StateDiagram](axi_slave_write_StateDiagram)
 ## Encryption hardware schematics
 ![encryption schematics](encryption_schematics.jpg)
