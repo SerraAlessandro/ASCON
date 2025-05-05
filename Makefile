@@ -1,5 +1,3 @@
-# MAIN-ONLY: DO NOT MODIFY THIS FILE
-#
 # Copyright © Telecom Paris
 # Copyright © Renaud Pacalet (renaud.pacalet@telecom-paris.fr)
 #
