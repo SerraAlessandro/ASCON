@@ -20,14 +20,14 @@ use common.rnd_pkg.all;
 use common.utils_pkg.all;
 
 
-entity dma_in_sim is
+entity dma_in_axi_sim is
     generic(
         n:       positive := 100; -- test vectors
         max_len: positive := 100  -- maximum length of transfer
     );
-end entity dma_in_sim;
+end entity dma_in_axi_sim;
 
-architecture sim of dma_in_sim is
+architecture sim of dma_in_axi_sim is
 
     signal aclk:           std_ulogic;
     signal aresetn:        std_ulogic;
@@ -47,6 +47,12 @@ architecture sim of dma_in_sim is
     signal m1_axi_tready:  std_ulogic;
     signal m1_axi_tdata:   std_ulogic_vector(31 downto 0);
     signal m1_axi_tlast:   std_ulogic;
+	 signal data_ack: 		std_ulogic;
+	 signal new_data:			std_ulogic;
+	 signal last_data:		std_ulogic;
+	 signal no_data:			std_ulogic;
+	 signal info_128:			std_ulogic_vector(127 downto 0);
+	 signal data_req:			std_ulogic;
 
     signal resp_okay:      boolean;
 
@@ -77,6 +83,25 @@ begin
         m1_axi_tdata   => m1_axi_tdata,
         m1_axi_tlast   => m1_axi_tlast
     );
+	 
+	 u1: entity work.axi_lite_slave(behavior)
+	 port map(	
+			information => m1_axi_tdata,
+			clk => aclk,
+			tvalid => m1_axi_tvalid,
+			tlast => m1_axi_tlast,
+			data_ack => data_ack,
+			aresetn => aresetn,
+			data_req => data_req,
+			info_128 => info_128,
+			new_data => new_data,
+			last_data => last_data,
+			tready => m1_axi_tready,
+			no_data => no_data
+	);
+	
+	data_req <= '0', '1' after 50 ns;
+	data_ack <= '0', '1' after 50 ns;
 
     process
     begin
@@ -85,6 +110,8 @@ begin
         aclk <= '1';
         wait for 1 ns;
     end process;
+	 
+	 
 
     -- memory emulator
     process(aclk)
