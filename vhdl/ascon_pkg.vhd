@@ -28,6 +28,7 @@ package ascon_pkg is
 	function ascon_ps_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_pl_f(state: ascon_state_t) return ascon_state_t;
 	function ascon_p_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
+	function ascon_p_f_multiple (state: ascon_state_t; rnd: natural range 0 to 16; cnt: natural range 0 to 11; n_perm: natural range 0 to 4) return ascon_state_t;
 	function ascon_enc_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; pl: std_ulogic_vector) return ascon_enc_out_t;
 	function ascon_dec_f (key: std_ulogic_vector; nonce: std_ulogic_vector; ad: std_ulogic_vector; ci: std_ulogic_vector) return ascon_dec_out_t;
 	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector;
@@ -306,6 +307,16 @@ package body ascon_pkg is
 
 	end function ascon_dec_f;
 
+	function ascon_p_f_multiple (state: ascon_state_t; rnd: natural range 0 to 16; cnt: natural range 0 to 11; n_perm: natural range 0 to 4) return ascon_state_t is
+		variable tmp1: ascon_state_t := state;
+		begin
+			multi: for j in 0 to (n_perm-1) loop
+				tmp1 := ascon_p_f(tmp1,rnd,(n_perm*cnt)+j);
+				--tmp1 := ascon_pc_f(tmp1, rnd, (n_perm*cnt)+j);
+			end loop multi;
+		return tmp1;
+	end function ascon_p_f_multiple;
+
 
 	function ascon_p_f (state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
 		variable tmp1: ascon_state_t := state;
@@ -322,7 +333,9 @@ package body ascon_pkg is
 	function ascon_pc_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t is
 		variable tmp: ascon_state_t := state;
 		begin
-			assert i < rnd severity failure;
+			--assert i < rnd severity failure;
+			assert i < rnd report "Invalid round index i = " & integer'image(i) & ", rnd = " & integer'image(rnd) severity failure;
+
 			tmp(2) := state(2) XOR (x"00000000000000" & ascon_const_c(16 - rnd + i));
 		return tmp;
 	end function ascon_pc_f;
