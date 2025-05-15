@@ -6,11 +6,11 @@ use work.ascon_pkg.all;
 
 entity ASCON_fsm is
 	generic( n_perm : natural := 1);
-	port(	--axi_lite_input: in std_ulogic_vector(127 downto 0);
-			key: in std_ulogic_vector(127 downto 0);
-			nonce: in std_ulogic_vector(127 downto 0);
+	port(		axi4_read: in std_ulogic_vector(127 downto 0);
 			axi_stream_input: in std_ulogic_vector(127 downto 0);
 			clk,rst,start: in std_ulogic;
+			axi4_data_ready: in std_ulogic;
+			axi4_read_data: out std_ulogic;
 			s0_data_ack: out std_ulogic;
 			s0_data_req: out std_ulogic;
 			s0_new_data: in std_ulogic;
@@ -19,7 +19,9 @@ entity ASCON_fsm is
 			m0_data_ready: in std_ulogic;
 			m0_new_data : out std_ulogic;
 			m0_last_data: out std_ulogic;
-			--axi_lite_output: out std_ulogic_vector(31 downto 0);
+			axi4_write: out std_ulogic_vector(127 downto 0);
+			axi4_data_write: out std_ulogic;
+			axi4_data_ack: in std_ulogic;
 			p128_out: out std_ulogic_vector(127 downto 0);
 			p192_out: out std_ulogic_vector(191 downto 0);
 			axi_stream_output: out std_ulogic_vector(127 downto 0)
@@ -60,34 +62,70 @@ signal sel_out_128: std_ulogic;
 signal sel_out_192: std_ulogic;
 signal ad_end: std_ulogic;
 signal ad_last: std_ulogic;
+signal e_k: std_ulogic;
+signal e_n: std_ulogic;
+signal r_k: std_ulogic;
+signal r_n: std_ulogic;
+signal key: std_ulogic_vector(127 downto 0);
+signal nonce: std_ulogic_vector(127 downto 0);
 
 type state_type is (	idle, 
-							init_first, 
-							init, 
-							last_init, 
-							ad_request, 
-							ad_1_first, 
-							ad_first,
-							ad,
-							last_ad,
-							pl_request,
-							wait1,
-							data_send,
-							data_send_last,
-							pl_first,
-							pl,
-							fin_first,
-							fin,
-							wait2,t_send,
-							ad_ack,
-							wait_pl
-							);
+			read_k,
+			read_n,
+			read_n_only,
+			load_n,
+			init_first, 
+			init, 
+			last_init, 
+			ad_request, 
+			ad_1_first, 
+			ad_first,
+			ad,
+			last_ad,
+			pl_request,
+			wait1,
+			data_send,
+			data_send_last,
+			pl_first,
+			pl,
+			fin_first,
+			fin,
+			write_t,
+			ad_ack,
+			wait_pl
+			);
 							
 signal state : state_type;
 
 
 
 begin
+
+	reg_k: process(clk)
+	begin
+		if(clk'event and clk = '1') then
+			if(r_k = '1') then
+				key <= (others => '0');
+			elsif (e_k='1') then
+				key <= axi4_read;
+			else
+				key <= key;
+			end if;
+		end if;
+	end process reg_k;
+
+	reg_n: process(clk)
+	begin
+		if(clk'event and clk = '1') then
+			if(r_n = '1') then
+				nonce <= (others => '0');
+			elsif (e_n='1') then
+				nonce <= axi4_read;
+			else
+				nonce <= nonce;
+			end if;
+		end if;
+	end process reg_n;
 	
 	reg_128: process(clk)
 	begin
@@ -139,16 +177,16 @@ begin
 		
 	
 	counter: process(clk)
-   begin
-       if rising_edge(clk) then
-           if (cnt_r = '1') then
-               cnt <= 0;
-           elsif (cnt_e = '1') then
-					if (cnt < (12/n_perm)-1) then
-						cnt <= cnt + 1;
-					else
-						cnt <= 0;
-					end if;
+   	begin
+       	if rising_edge(clk) then
+           	if (cnt_r = '1') then
+               		cnt <= 0;
+           	elsif (cnt_e = '1') then
+			if (cnt < (12/n_perm)-1) then
+				cnt <= cnt + 1;
+			else
+				cnt <= 0;
+			end if;
            end if;
        end if;
    end process counter;
@@ -165,6 +203,8 @@ begin
 	
 	axi_stream_output <= axi_stream_input xor mux_p128;
 
+	axi4_write <= p192_out(191 downto 64) xor key;
+	
 	state_in(0) <= reg128_out(63 downto 0);
 	state_in(1) <= reg128_out(127 downto 64);
 	state_in(2) <= reg192_out(63 downto 0);
@@ -198,11 +238,35 @@ begin
 			case state is 
 				when idle =>
 					if (start = '1') then
-						state <= init_first;
+						state <= read_k;
 					else
 						state <= idle;
 					end if;
-					
+
+				when read_k =>
+					if (axi4_data_ready = '1') then
+						state <= read_n;
+					else
+						state <= read_k;
+					end if;
+
+				when read_n =>
+					if (axi4_data_ready = '1') then
+						state <= init_first;
+					else
+						state <= read_n_only;
+					end if;
+
+				when read_n_only =>
+					if (axi4_data_ready = '1') then
+						state <= load_n;
+					else
+						state <= read_n_only;
+					end if;
+
+				when load_n =>
+					state <= init_first;
+
 				when init_first =>
 					state <= init;
 					
@@ -304,24 +368,17 @@ begin
 				
 				when fin =>
 					if (cnt = (12/n_perm) - 2) then
-						if (m0_data_ready = '1') then
-							state <= t_send;
-						else
-							state <= wait2;
-						end if;
+						state <= write_t;
 					else
 						state <= fin;
 					end if;
 				
-				when wait2 =>
-					if (m0_data_ready = '1') then
-						state <= t_send;
+				when write_t =>
+					if (axi4_data_ack = '1') then
+						state <= idle;
 					else
-						state <= wait2;
+						state <= write_t;
 					end if;
-					
-				when t_send =>
-					state <= idle;
 				
 				when others =>
 					state <= idle;
@@ -355,8 +412,13 @@ begin
 		sel_out_192 <= '0';
 		ad_last <= '0';
 		rnd <= 12;
-		
-		
+		axi4_read_data <= '0';
+		e_k <= '0';
+		e_n <= '0';
+		r_k <= '0';
+		r_n <= '0';
+		axi4_data_write <= '0';		
+
 		case state is
 			when idle =>
 				cnt_r <= '1';
@@ -364,6 +426,21 @@ begin
 				ff_pl_r <= '1';
 				r_128 <= '1';
 				r_192 <= '1';
+				r_k <= '1';
+				r_n <= '1';
+	
+			when read_k =>
+				axi4_read_data <= '1';
+
+			when read_n =>
+				axi4_read_data <= '1';
+				e_k <= '1';
+
+			when read_n_only =>
+				axi4_read_data <= '1';
+
+			when load_n =>
+				e_n <= '1';
 				
 			when init_first =>
 				sel_128 <= "11";
@@ -446,6 +523,9 @@ begin
 				rnd <= 8;
 				m0_new_data <= '1';
 				sel_tx <= '0';
+				sel_out_128 <= '1';
+				sel_out_192 <= '1';
+				
 				
 			when pl_first =>
 				rnd <= 8;
@@ -475,6 +555,8 @@ begin
 				m0_new_data <= '1';
 				m0_last_data <= '1';
 				cnt_r <= '1';
+				sel_out_128 <= '1';
+				sel_out_192 <= '1';
 				
 			when fin_first =>
 				sel_128 <= "01";
@@ -491,11 +573,8 @@ begin
 				e_192 <= '1';
 				cnt_e <= '1';
 				
-			when wait2 =>
-			
-			when t_send =>
-				sel_tx <= '1';
-				new_data_m <= '1';
+			when write_t =>
+				axi4_data_write <= '1';
 				
 		end case;
 	end process;
