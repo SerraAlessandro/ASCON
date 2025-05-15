@@ -43,7 +43,9 @@ entity axi_lite_interface is
     start_out:      out std_ulogic;
     addr_out:       out std_ulogic_vector(31 downto 0);
     eot_out:        in  std_ulogic;
-    resp_out:       in  std_ulogic_vector(1 downto 0)
+    resp_out:       in  std_ulogic_vector(1 downto 0);
+    tag_valid:      in std_ulogic;
+    tag:            in std_ulogic_vector(127 downto 0)
   );
 end entity axi_lite_interface;
 
