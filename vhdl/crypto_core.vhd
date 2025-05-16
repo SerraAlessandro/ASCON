@@ -29,6 +29,7 @@ entity crypto_core is
     key:        in  std_ulogic_vector(127 downto 0);
     nonce:      in  std_ulogic_vector(127 downto 0);
     tag_valid:  out std_ulogic;
+    tag_ready:  in  std_ulogic;
     tag:        out std_ulogic_vector(127 downto 0)
   );
 end entity crypto_core;
