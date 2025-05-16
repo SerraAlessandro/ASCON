@@ -42,24 +42,7 @@ entity top_for_zybo is
         m0_axi_wready:  in  std_ulogic;
         m0_axi_bvalid:  in  std_ulogic;
         m0_axi_bresp:   in  std_ulogic_vector(1 downto 0);
-        m0_axi_bready:  out std_ulogic;
-        m1_axi_araddr:  out std_ulogic_vector(31 downto 0);
-        m1_axi_arvalid: out std_ulogic;
-        m1_axi_arready: in  std_ulogic;
-        m1_axi_rdata:   in  std_ulogic_vector(31 downto 0);
-        m1_axi_rresp:   in  std_ulogic_vector(1 downto 0);
-        m1_axi_rvalid:  in  std_ulogic;
-        m1_axi_rready:  out std_ulogic;
-        m1_axi_awaddr:  out std_ulogic_vector(31 downto 0);
-        m1_axi_awvalid: out std_ulogic;
-        m1_axi_awready: in  std_ulogic;
-        m1_axi_wdata:   out std_ulogic_vector(31 downto 0);
-        m1_axi_wstrb:   out std_ulogic_vector(3 downto 0);
-        m1_axi_wvalid:  out std_ulogic;
-        m1_axi_wready:  in  std_ulogic;
-        m1_axi_bvalid:  in  std_ulogic;
-        m1_axi_bresp:   in  std_ulogic_vector(1 downto 0);
-        m1_axi_bready:  out std_ulogic
+        m0_axi_bready:  out std_ulogic
     );
 end entity top_for_zybo;
 
@@ -84,6 +67,8 @@ architecture rtl of top_for_zybo is
   signal tlast_out:  std_ulogic;
   signal key:        std_ulogic_vector(127 downto 0);
   signal nonce:      std_ulogic_vector(127 downto 0);
+  signal tag_valid:  std_ulogic;
+  signal tag_ready:  std_ulogic;
   signal tag:        std_ulogic_vector(127 downto 0);
 
 begin
@@ -118,16 +103,16 @@ begin
     addr           => addr_out,
     eot            => eot_out,
     resp           => resp_out,
-    m0_axi_awaddr  => m1_axi_awaddr,
-    m0_axi_awvalid => m1_axi_awvalid,
-    m0_axi_awready => m1_axi_awready,
-    m0_axi_wdata   => m1_axi_wdata,
-    m0_axi_wstrb   => m1_axi_wstrb,
-    m0_axi_wvalid  => m1_axi_wvalid,
-    m0_axi_wready  => m1_axi_wready,
-    m0_axi_bresp   => m1_axi_bresp,
-    m0_axi_bvalid  => m1_axi_bvalid,
-    m0_axi_bready  => m1_axi_bready,
+    m0_axi_awaddr  => m0_axi_awaddr,
+    m0_axi_awvalid => m0_axi_awvalid,
+    m0_axi_awready => m0_axi_awready,
+    m0_axi_wdata   => m0_axi_wdata,
+    m0_axi_wstrb   => m0_axi_wstrb,
+    m0_axi_wvalid  => m0_axi_wvalid,
+    m0_axi_wready  => m0_axi_wready,
+    m0_axi_bresp   => m0_axi_bresp,
+    m0_axi_bvalid  => m0_axi_bvalid,
+    m0_axi_bready  => m0_axi_bready,
     s0_axi_tvalid  => tvalid_out,
     s0_axi_tready  => tready_out,
     s0_axi_tdata   => tdata_out,
@@ -163,7 +148,12 @@ begin
     start_out      => start_out,
     addr_out       => addr_out,
     eot_out        => eot_out,
-    resp_out       => resp_out
+    resp_out       => resp_out,
+    key            => key,
+    nonce          => nonce,
+    tag_valid      => tag_valid,
+    tag_ready      => tag_ready,
+    tag            => tag
   );
 
   crypto_core_0: entity work.crypto_core
@@ -172,6 +162,8 @@ begin
     aresetn    => aresetn,
     key        => key,
     nonce      => nonce,
+    tag_valid  => tag_valid,
+    tag_ready  => tag_ready,
     tag        => tag,
     tvalid_in  => tvalid_in,
     tready_in  => tready_in,
