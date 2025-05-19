@@ -1,3 +1,11 @@
+Side-channel attacks on ASCON hardware accelerator
+
+---
+
+[TOC]
+
+---
+
 # ASCON
 
 ## Building the C reference model
@@ -152,3 +160,68 @@ By reading it from address 0x20, it is already in the correct format.
 ![axi_slave_write StateDiagram](axi_slave_write_StateDiagram.jpg)
 ## Encryption hardware schematics
 ![encryption schematics](encryption_schematics.jpg)
+
+# ASCON on Zybo
+
+The Zybo version of the ASCON accelerator comprises DMA engines for memory-to-crypto and crypto-to-memory transfers.
+It communicates with the software stack through a AXI lite control interface used to provide a secret key and a nonce, to read out the authentication tag, to configure and control the DMA engines and to read status information.
+
+## The AXI lite control interface
+
+The address mapping of this AXI lite control interface is the following:
+
+| Name       | Byte offset   | Byte length | Description                     |
+| :----      | :----         | :----       | :----                           |
+| `KEY`      | 0-15          | 16          | Secret key                      |
+| `NONCE`    | 16-31         | 16          | Nonce                           |
+| `TAG`      | 32-47         | 16          | Tag                             |
+| `ADDR_IN`  | 48-51         | 4           | Input starting address          |
+| `LEN_IN`   | 52-55         | 4           | Input length (in 32 bits words) |
+| `ADDR_OUT` | 56-59         | 4           | Output starting address         |
+| `CTRL`     | 60-63         | 4           | Control register                |
+| `STATUS`   | 64-67         | 4           | Status register                 |
+| `-`        | 68-4095       | 4028        | Unmapped                        |
+
+Only 4-bytes aligned accesses are supported.
+Read or write accesses at unaligned addresses return a `SLVERR` response and have no other effect.
+Writing the `TAG` region returns a `SLVERR` response and has no other effect.
+Writing in the unmapped region returns a `DECERR` response and has no other effect.
+
+The two Least Significant Bits (LSB) of `ADDR_IN` and `ADDR_OUT` are hard-wired to 0; writing them has no effect.
+This guarantees the memory alignment of the starting addresses on 4 bytes boundaries.
+
+The two Most Significant Bits (MSB) of `LEN_IN` are hard-wired to 0; writing them has no effect.
+This guarantees a maximum input length of 4 GB.
+
+The layout of the 32-bits CTRL register is the following:
+
+| Name        | Bit range     | Bit width   | Description              |
+| :----       | :----         | :----       | :----                    |
+| `START_IN`  | 0-0           | 1           | DMA input start command  |
+| `START_OUT` | 1-1           | 1           | DMA output start command |
+| `-`         | 31-2          | 30          | Reserved                 |
+
+- Writing a 1 in `START_IN` launches the input DMA if the DMA engine is available, else this has no effect.
+  The flag is automatically cleared on the following rising edge of the clock.
+- Writing a 1 in `START_OUT` launches the output DMA if the DMA engine is available, else this has no effect.
+  The flag is automatically cleared on the following rising edge of the clock.
+
+Writing the other bits has no effect; they read as zero.
+
+The layout of the 32-bits STATUS register is the following:
+
+| Name        | Bit range     | Bit width   | Description                |
+| :----       | :----         | :----       | :----                      |
+| `BUSY`      | 0-0           | 1           | Busy flag                  |
+| `ERR_IN`    | 2-1           | 2           | Input transfer error code  |
+| `ERR_OUT`   | 4-3           | 2           | Output transfer error code |
+| `-`         | 31-5          | 27          | Reserved                   |
+
+- The `BUSY` flag is automatically set to 1 when a 1 is written to `START_IN`.
+  It is automatically set to 0 when an output DMA transfer ends.
+- The `ERR_IN` field contains the last non-OKAY AXI read response from the memory during an input DMA transfer, or OKAY if there was no error.
+- The `ERR_OUT` field contains the last non-OKAY AXI write response from the memory during an output DMA transfer, or OKAY if there was no error.
+
+`ERR_IN` and `ERR_OUT` are cleared-on-set: when writing to `STATUS`, bits of `ERR_IN` and `ERR_OUT` are set to 0 if they are written a 1.
+The other written bits are ignored.
+The reserved bits read as zero.

@@ -35,17 +35,20 @@ entity axi_lite_interface is
     s0_axi_bvalid:  out std_ulogic;
     s0_axi_bresp:   out std_ulogic_vector(1 downto 0);
     s0_axi_bready:  in  std_ulogic;
-    start_in:       out std_ulogic;
-    addr_in:        out std_ulogic_vector(31 downto 0);
-    len_in:         out std_ulogic_vector(29 downto 0);
-    eot_in:         in  std_ulogic;
-    resp_in:        in  std_ulogic_vector(1 downto 0);
-    start_out:      out std_ulogic;
-    addr_out:       out std_ulogic_vector(31 downto 0);
-    eot_out:        in  std_ulogic;
-    resp_out:       in  std_ulogic_vector(1 downto 0);
-    tag_valid:      in std_ulogic;
-    tag:            in std_ulogic_vector(127 downto 0)
+    start_in:       out std_ulogic;                      -- start input DMA engine
+    addr_in:        out std_ulogic_vector(31 downto 0);  -- start memory address for input DMA transfers
+    len_in:         out std_ulogic_vector(29 downto 0);  -- length (in 4-bytes words) of input DMA transfers
+    eot_in:         in  std_ulogic;                      -- end of input DMA transfers
+    resp_in:        in  std_ulogic_vector(1 downto 0);   -- last AXI error response during an input DMA transfer
+    start_out:      out std_ulogic;                      -- start output DMA engine
+    addr_out:       out std_ulogic_vector(31 downto 0);  -- start memory address for output DMA transfers
+    eot_out:        in  std_ulogic;                      -- end of output DMA transfers
+    resp_out:       in  std_ulogic_vector(1 downto 0);   -- last AXI error response during an output DMA transfer
+    key:            out std_ulogic_vector(127 downto 0); -- secret key
+    nonce:          out std_ulogic_vector(127 downto 0); -- nonce
+    tag_valid:      in  std_ulogic;                      -- tag input is valid
+    tag_ready:      out std_ulogic;                      -- tag input acknowledge
+    tag:            in  std_ulogic_vector(127 downto 0)  -- authentication tag
   );
 end entity axi_lite_interface;
 
