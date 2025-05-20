@@ -6,11 +6,11 @@ use work.ascon_pkg.all;
 
 entity ASCON_fsm is
 	generic( n_perm : natural := 1);
-	port(		axi4_read: in std_ulogic_vector(127 downto 0);
+	port(		key: in std_ulogic_vector(127 downto 0);
+			nonce: in std_ulogic_vector(127 downto 0);
 			axi_stream_input: in std_ulogic_vector(127 downto 0);
-			clk,rst,start: in std_ulogic;
-			axi4_data_ready: in std_ulogic;
-			axi4_read_data: out std_ulogic;
+			clk: in std_ulogic;
+			rstn: in std_ulogic;
 			s0_data_ack: out std_ulogic;
 			s0_data_req: out std_ulogic;
 			s0_new_data: in std_ulogic;
@@ -19,16 +19,16 @@ entity ASCON_fsm is
 			m0_data_ready: in std_ulogic;
 			m0_new_data : out std_ulogic;
 			m0_last_data: out std_ulogic;
-			axi4_write: out std_ulogic_vector(127 downto 0);
-			axi4_data_write: out std_ulogic;
-			axi4_data_ack: in std_ulogic;
+			tag_valid: out std_ulogic;
+			tag_ready: in std_ulogic;
 			p128_out: out std_ulogic_vector(127 downto 0);
 			p192_out: out std_ulogic_vector(191 downto 0);
+			tag: out std_ulogic_vector(127 downto 0);
 			axi_stream_output: out std_ulogic_vector(127 downto 0)
 			);
 end ASCON_fsm;
 
-ARCHITECTURE Behavior OF ASCON_fsm IS
+ARCHITECTURE rtl OF ASCON_fsm IS
 
 constant rnd_c : natural := 12;
 
@@ -51,29 +51,15 @@ signal cnt_e : std_ulogic;
 signal cnt_r : std_ulogic;
 signal ff_ad_r : std_ulogic;
 signal ff_ad_e : std_ulogic;
-signal ff_pl_r : std_ulogic;
-signal ff_pl_e : std_ulogic;
 signal new_data_m : std_ulogic;
 signal last_data_m : std_ulogic;
-signal sel_tx : std_ulogic;
 signal first_ad: std_ulogic;
-signal first_pl: std_ulogic;
 signal sel_out_128: std_ulogic;
 signal sel_out_192: std_ulogic;
 signal ad_end: std_ulogic;
 signal ad_last: std_ulogic;
-signal e_k: std_ulogic;
-signal e_n: std_ulogic;
-signal r_k: std_ulogic;
-signal r_n: std_ulogic;
-signal key: std_ulogic_vector(127 downto 0);
-signal nonce: std_ulogic_vector(127 downto 0);
 
 type state_type is (	idle, 
-			read_k,
-			read_n,
-			read_n_only,
-			load_n,
 			init_first, 
 			init, 
 			last_init, 
@@ -83,6 +69,7 @@ type state_type is (	idle,
 			ad,
 			last_ad,
 			pl_request,
+			end_init_noad,
 			wait1,
 			data_send,
 			data_send_last,
@@ -100,32 +87,6 @@ signal state : state_type;
 
 
 begin
-
-	reg_k: process(clk)
-	begin
-		if(clk'event and clk = '1') then
-			if(r_k = '1') then
-				key <= (others => '0');
-			elsif (e_k='1') then
-				key <= axi4_read;
-			else
-				key <= key;
-			end if;
-		end if;
-	end process reg_k;
-
-	reg_n: process(clk)
-	begin
-		if(clk'event and clk = '1') then
-			if(r_n = '1') then
-				nonce <= (others => '0');
-			elsif (e_n='1') then
-				nonce <= axi4_read;
-			else
-				nonce <= nonce;
-			end if;
-		end if;
-	end process reg_n;
 	
 	reg_128: process(clk)
 	begin
@@ -163,18 +124,6 @@ begin
 			end if;
 		end if;
 	end process ff_ad;
-
-	ff_pl: process(clk)
-	begin
-		if(clk'event and clk = '1') then
-			if(ff_pl_r = '1') then
-				first_pl <= '0';
-			elsif (ff_pl_e ='1') then
-				first_pl <= '1';
-			end if;
-		end if;
-	end process ff_pl;
-		
 	
 	counter: process(clk)
    	begin
@@ -199,11 +148,11 @@ begin
 	reg192_in <= 	nonce & key(127 downto 64) when sel_192 = "11" else 
 						(mux_p192(191 downto 191) xor ad_last) & mux_p192(190 downto 0) when sel_192 = "00" else
 						(x"0000000000000000" & key) xor mux_p192 when sel_192  = "10" else
-						(key & x"0000000000000000") xor mux_p192 when sel_192 = "01";
+						((key(127 downto 127) xor ad_last) & key(126 downto 0) & x"0000000000000000") xor mux_p192 when sel_192 = "01";
 	
 	axi_stream_output <= axi_stream_input xor mux_p128;
 
-	axi4_write <= p192_out(191 downto 64) xor key;
+	tag <= p192_out(191 downto 64) xor key;
 	
 	state_in(0) <= reg128_out(63 downto 0);
 	state_in(1) <= reg128_out(127 downto 64);
@@ -232,41 +181,13 @@ begin
 	
 	state_trans: process (clk)
 	begin
-		if (rst = '1') then
+		if (rstn = '0') then
 			state <= idle;
 		elsif (clk'event and clk = '1') then
 			case state is 
 				when idle =>
-					if (start = '1') then
-						state <= read_k;
-					else
-						state <= idle;
-					end if;
-
-				when read_k =>
-					if (axi4_data_ready = '1') then
-						state <= read_n;
-					else
-						state <= read_k;
-					end if;
-
-				when read_n =>
-					if (axi4_data_ready = '1') then
-						state <= init_first;
-					else
-						state <= read_n_only;
-					end if;
-
-				when read_n_only =>
-					if (axi4_data_ready = '1') then
-						state <= load_n;
-					else
-						state <= read_n_only;
-					end if;
-
-				when load_n =>
 					state <= init_first;
-
+					
 				when init_first =>
 					state <= init;
 					
@@ -292,8 +213,11 @@ begin
 							state <= ad_request;
 						end if;
 					else
-						state <= last_ad;
+						state <= end_init_noad;
 					end if;
+
+				when end_init_noad =>
+					state <= pl_request;
 					
 				when ad_1_first =>
 					state <= ad;
@@ -374,7 +298,7 @@ begin
 					end if;
 				
 				when write_t =>
-					if (axi4_data_ack = '1') then
+					if (tag_ready = '1') then
 						state <= idle;
 					else
 						state <= write_t;
@@ -403,51 +327,26 @@ begin
 		s0_data_ack <= '0';
 		ff_ad_r <= '0';
 		ff_ad_e <= '0';
-		ff_pl_r <= '0';
-		ff_pl_e <= '0';
 		new_data_m <= '0';
 		last_data_m <= '0';
-		sel_tx <= '0';
 		sel_out_128 <= '0';
 		sel_out_192 <= '0';
 		ad_last <= '0';
 		rnd <= 12;
-		axi4_read_data <= '0';
-		e_k <= '0';
-		e_n <= '0';
-		r_k <= '0';
-		r_n <= '0';
-		axi4_data_write <= '0';		
+		tag_valid <= '0';	
 
 		case state is
 			when idle =>
 				cnt_r <= '1';
 				ff_ad_r <= '1';
-				ff_pl_r <= '1';
 				r_128 <= '1';
 				r_192 <= '1';
-				r_k <= '1';
-				r_n <= '1';
-	
-			when read_k =>
-				axi4_read_data <= '1';
-
-			when read_n =>
-				axi4_read_data <= '1';
-				e_k <= '1';
-
-			when read_n_only =>
-				axi4_read_data <= '1';
-
-			when load_n =>
-				e_n <= '1';
 				
 			when init_first =>
 				sel_128 <= "11";
 				sel_192 <= "11";
 				e_128 <= '1';
 				e_192 <= '1';
-				--cnt_e <= '1';
 				
 			when init =>
 				sel_128 <= "00";
@@ -465,7 +364,6 @@ begin
 			when ad_request =>
 				s0_data_req <= '1';
 				rnd <= 8;
-				--cnt_r <= '1';
 				
 			when ad_1_first =>
 				rnd <= 8;
@@ -504,17 +402,25 @@ begin
 			when last_ad =>
 				rnd <= 8;
 				cnt_r <= '1';
-				ff_pl_e <= '1';
 				e_128 <= '1';
 				e_192 <= '1';
 				s0_data_ack <= '1';
 				ad_last <= '1';
 				
-				
 			when pl_request =>
 				rnd <= 8;
 				s0_data_req <= '1';
 				cnt_r <= '1';
+
+			when end_init_noad =>
+				rnd <= 8;
+				sel_128 <= "00";
+				sel_192 <= "01";
+				e_128 <= '1';
+				e_192 <= '1';
+				sel_out_128 <= '1';
+				sel_out_192 <= '1';
+				ad_last <= '1';			
 				
 			when wait1 =>
 				rnd <= 8;
@@ -522,7 +428,6 @@ begin
 			when data_send =>
 				rnd <= 8;
 				m0_new_data <= '1';
-				sel_tx <= '0';
 				sel_out_128 <= '1';
 				sel_out_192 <= '1';
 				
@@ -533,7 +438,6 @@ begin
 				sel_192 <= "00";
 				e_128 <= '1';
 				e_192 <= '1';
-				ff_pl_r <= '1';
 				sel_out_128 <= '1';
 				sel_out_192 <= '1';
 				
@@ -574,9 +478,9 @@ begin
 				cnt_e <= '1';
 				
 			when write_t =>
-				axi4_data_write <= '1';
+				tag_valid <= '1';
 				
 		end case;
 	end process;
 
-end behavior;
+end rtl;
