@@ -1,5 +1,5 @@
--- Copyright Â© Telecom Paris
--- Copyright Â© Renaud Pacalet (renaud.pacalet@telecom-paris.fr)
+-- Copyright © Telecom Paris
+-- Copyright © Renaud Pacalet (renaud.pacalet@telecom-paris.fr)
 -- 
 -- This file must be used under the terms of the CeCILL. This source
 -- file is licensed as described in the file COPYING, which you should
@@ -53,5 +53,144 @@ entity axi_lite_interface is
 end entity axi_lite_interface;
 
 architecture rtl of axi_lite_interface is
+
 begin
+
+-- CPU reads from registers
+	process(aclk)
+	begin
+		if rising_edge(aclk) then
+			if aresetn = '0' then
+				state_r <= idle;
+			else
+				case state_r is
+					when idle =>
+						s0_axi_arready <= '0';
+						s0_axi_rvalid <= '0';
+						if s0_axi_arvalid = '1' then
+							s0_axi_arready <= '1';
+							s0_axi_rvalid <= '1';
+							add := to_integer(s0_axi_araddr(11 downto 2));
+							if s0_axi_araddr(1 downto 0) != "00" then
+								s0_axi_rresp <= axi_resp_slverr;
+							elsif add >= 17 then
+								s0_axi_rresp <= axi_resp_decerr;
+							else
+								s0_axi_rresp <= axi_resp_okay;
+								if (add >= 0 and add <= 3) then
+									s0_axi_rdata <= key((32*(add + 1)-1) downto 32*(add));
+								elsif (add >= 4 and add <= 7) then
+									s0_axi_rdata <= nonce((32*(add -3)-1) downto 32*(add-4));
+								elsif (add >= 8 and add <= 11) then
+									s0_axi_rdata <= tag((32*(add -7)-1) downto 32*(add-8));
+								elsif add = 12 then
+									s0_axi_rdata <= addr_in(11 downto 2) & "00";
+								elsif add = 13 then
+									s0_axi_rdata <= "00" & len_in(9 downto 0);
+								elsif add = 14 then
+									s0_axi_rdata <= addr_out(11 downto 2) & "00";
+								elsif add = 15 then
+									s0_axi_rdata <= ctrl;
+								else
+									s0_axi_rdata <= status;
+								end if;
+							end if;
+							state <= resp1;
+						end if;
+	
+					when resp1 =>
+						if s0_axi_rready = '1' then
+							s0_axi_arready <= '0';
+							s0_axi_rvalid <= '0';
+	                           			state_r <= idle;
+						else
+							s0_axi_arready <= '0';
+							s0_axi_rvalid <= '1';
+							
+	                       			end if;
+
+				end case;
+			end if;
+		end if;
+
+
+	-- CPU writes inside registers
+	process(aclk)
+	begin
+		if rising_edge(aclk) then
+			if aresetn = '0' then
+				state_w <= idle;
+			else
+				case state_w is
+					when idle =>
+						s0_axi_awready <= '0';
+						s0_axi_wready <= '0';
+						s0_Axi_bvalid <= '0';
+						if s0_axi_awvalid = '1' and s0_axi_wvalid = '1' then 
+							
+							s0_axi_awready <= '1';
+							s0_axi_wready <= '1';
+							s0_axi_bvalid <= '1';
+
+							bresp check
+
+							add := to_integer(s0_axi_awaddr(11 downto 2));
+							if s0_axi_awaddr(1 downto 0) != "00" or (add >= 8 and add <= 11) then
+								s0_axi_rresp <= axi_resp_slverr;
+							elsif add >= 17 then
+								s0_axi_rresp <= axi_resp_decerr;
+							else
+								if (add >= 0 and add <= 3) then
+									key((32*(add + 1)-1) downto 32*(add)) <= s0_axi_wdata;
+								elsif (add >= 4 and add <= 7) then
+									nonce((32*(add -3)-1) downto 32*(add-4)) <= s0_axi_wdata;
+								elsif add = 12 then
+									addr_in(11 downto 2) & "00"  <= s0_axi_wdata;
+								elsif add = 13 then
+									"00" & len_in(9 downto 0) <= s0_axi_wdata;
+								elsif add = 14 then
+									addr_out(11 downto 2) & "00" <= s0_axi_wdata;
+								elsif add = 15 then
+									ctrl(1 downto 0) <= s0_axi_wdata(1 downto 0);
+								else
+									status(3 downto 0) <= s0_axi_wdata(3 downto 0);
+								end if;
+
+							state_w <= resp1;
+						end if;
+			
+					when resp1 =>
+						s0_axi_awready <= '0';
+						s0_axi_wready <= '0';
+						if s0_axi_bready = '1' then
+	                           			state_r <= idle;
+	                       			end if;
+				end case;
+			end if;
+		end if;
+	end process;
+
+
+
+	process(aclk)
+	begin
+		if rising_edge(aclk) then
+			if start_in = '1' then
+				start_in <= '0';
+			end if;
+		end if;
+	end process;
+
+	process(aclk)
+	begin
+		if rising_edge(aclk) then
+			if start_out = '1' then
+				start_out <= '0';
+			end if;
+		end if;
+	end process;
+
+
+
+
 end architecture rtl;
