@@ -55,11 +55,15 @@ end entity axi_lite_interface;
 architecture rtl of axi_lite_interface is
 signal status: std_ulogic_vector(31 downto 0);
 signal ctrl: std_ulogic_vector(31 downto 0);
-signal add: integer range 0 to 1023;
+
+type state is (idle,resp1);
+signal state_r,state_w : state;
+
 begin
 
 -- CPU reads from registers
 	process(aclk)
+	variable add: integer range 0 to 1023;
 	begin
 		if rising_edge(aclk) then
 			if aresetn = '0' then
@@ -73,7 +77,7 @@ begin
 							s0_axi_arready <= '1';
 							s0_axi_rvalid <= '1';
 							add := to_integer(s0_axi_araddr(11 downto 2));
-							if s0_axi_araddr(1 downto 0) != "00" then
+							if s0_axi_araddr(1 downto 0) /= "00" then
 								s0_axi_rresp <= axi_resp_slverr;
 							--elsif add >= 17 then
 								--s0_axi_rresp <= axi_resp_decerr;
@@ -86,18 +90,18 @@ begin
 								elsif (add >= 8 and add <= 11) then
 									s0_axi_rdata <= tag((32*(add -7)-1) downto 32*(add-8));
 								elsif add = 12 then
-									s0_axi_rdata <= addr_in(11 downto 2) & "00";
+									s0_axi_rdata <= addr_in(31 downto 2) & "00";
 								elsif add = 13 then
-									s0_axi_rdata <= "00" & len_in(9 downto 0);
+									s0_axi_rdata <= "00" & len_in;
 								elsif add = 14 then
-									s0_axi_rdata <= addr_out(11 downto 2) & "00";
+									s0_axi_rdata <= addr_out(31 downto 2) & "00";
 								elsif add = 15 then
 									s0_axi_rdata <= ctrl;
 								else
 									s0_axi_rdata <= status;
 								end if;
 							end if;
-							state <= resp1;
+							state_r <= resp1;
 						end if;
 	
 					when resp1 =>
@@ -114,10 +118,12 @@ begin
 				end case;
 			end if;
 		end if;
+	end process;
 
 
 	-- CPU writes inside registers
 	process(aclk)
+	variable add: integer range 0 to 1023;
 	begin
 		if rising_edge(aclk) then
 			if aresetn = '0' then
@@ -141,7 +147,7 @@ begin
 							
 
 							add := to_integer(s0_axi_awaddr(11 downto 2));
-							if s0_axi_awaddr(1 downto 0) != "00" or (add >= 8 and add <= 11) then
+							if s0_axi_awaddr(1 downto 0) /= "00" or (add >= 8 and add <= 11) then
 								s0_axi_bresp <= axi_resp_slverr;
 							elsif add >= 17 then
 								s0_axi_bresp <= axi_resp_decerr;
@@ -152,16 +158,18 @@ begin
 								elsif (add >= 4 and add <= 7) then
 									nonce((32*(add -3)-1) downto 32*(add-4)) <= s0_axi_wdata;
 								elsif add = 12 then
-									addr_in(11 downto 2) & "00"  <= s0_axi_wdata;
+									addr_in <= s0_axi_wdata(31 downto 2) & "00";
 								elsif add = 13 then
-									"00" & len_in(9 downto 0) <= s0_axi_wdata;
+									len_in <= s0_axi_wdata(29 downto 0);
 								elsif add = 14 then
-									addr_out(11 downto 2) & "00" <= s0_axi_wdata;
+									addr_out <= s0_axi_wdata(31 downto 2) & "00";
 								elsif add = 15 then
 									ctrl(1 downto 0) <= s0_axi_wdata(1 downto 0);
 								else
 									status(4 downto 1) <= "0000";
 								end if;
+
+							end if;
 
 							state_w <= resp1;
 						end if;
@@ -171,7 +179,7 @@ begin
 						s0_axi_wready <= '0';
 						if s0_axi_bready = '1' then
 							s0_axi_bvalid <= '0';
-	                           			state_r <= idle;
+	                           			state_w <= idle;
 						else
 							s0_axi_bvalid <= '1';
 	                       			end if;

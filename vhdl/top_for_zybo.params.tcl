@@ -20,6 +20,9 @@ array set dus {
     common/axi_pkg.vhd     common
     common/fifo.vhd        common
     axi_lite_interface.vhd work
+    ASCON_fsm.vhd	   work
+    axi_stream_master.vhd  work
+    axi_stream_slave.vhd   work
     crypto_core.vhd        work
     dma_in.vhd             work
     dma_out.vhd            work
