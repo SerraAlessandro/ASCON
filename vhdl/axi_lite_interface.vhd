@@ -53,7 +53,9 @@ entity axi_lite_interface is
 end entity axi_lite_interface;
 
 architecture rtl of axi_lite_interface is
-
+signal status: std_ulogic_vector(31 downto 0);
+signal ctrl: std_ulogic_vector(31 downto 0);
+signal add: integer range 0 to 1023;
 begin
 
 -- CPU reads from registers
@@ -73,8 +75,8 @@ begin
 							add := to_integer(s0_axi_araddr(11 downto 2));
 							if s0_axi_araddr(1 downto 0) != "00" then
 								s0_axi_rresp <= axi_resp_slverr;
-							elsif add >= 17 then
-								s0_axi_rresp <= axi_resp_decerr;
+							--elsif add >= 17 then
+								--s0_axi_rresp <= axi_resp_decerr;
 							else
 								s0_axi_rresp <= axi_resp_okay;
 								if (add >= 0 and add <= 3) then
@@ -121,25 +123,30 @@ begin
 			if aresetn = '0' then
 				state_w <= idle;
 			else
+				ctrl(1 downto 0) <= "00"; -- reset START_IN and START_OUT
+				status(2 downto 1) <= resp_in;
+				status(4 downto 3) <= resp_out;
 				case state_w is
 					when idle =>
 						s0_axi_awready <= '0';
 						s0_axi_wready <= '0';
 						s0_Axi_bvalid <= '0';
+						
 						if s0_axi_awvalid = '1' and s0_axi_wvalid = '1' then 
 							
 							s0_axi_awready <= '1';
 							s0_axi_wready <= '1';
 							s0_axi_bvalid <= '1';
 
-							bresp check
+							
 
 							add := to_integer(s0_axi_awaddr(11 downto 2));
 							if s0_axi_awaddr(1 downto 0) != "00" or (add >= 8 and add <= 11) then
-								s0_axi_rresp <= axi_resp_slverr;
+								s0_axi_bresp <= axi_resp_slverr;
 							elsif add >= 17 then
-								s0_axi_rresp <= axi_resp_decerr;
-							else
+								s0_axi_bresp <= axi_resp_decerr;
+							else	
+								s0_axi_bresp <= axi_resp_okay;
 								if (add >= 0 and add <= 3) then
 									key((32*(add + 1)-1) downto 32*(add)) <= s0_axi_wdata;
 								elsif (add >= 4 and add <= 7) then
@@ -153,7 +160,7 @@ begin
 								elsif add = 15 then
 									ctrl(1 downto 0) <= s0_axi_wdata(1 downto 0);
 								else
-									status(3 downto 0) <= s0_axi_wdata(3 downto 0);
+									status(4 downto 1) <= "0000";
 								end if;
 
 							state_w <= resp1;
@@ -163,34 +170,27 @@ begin
 						s0_axi_awready <= '0';
 						s0_axi_wready <= '0';
 						if s0_axi_bready = '1' then
+							s0_axi_bvalid <= '0';
 	                           			state_r <= idle;
+						else
+							s0_axi_bvalid <= '1';
 	                       			end if;
 				end case;
 			end if;
 		end if;
 	end process;
 
-
-
 	process(aclk)
 	begin
-		if rising_edge(aclk) then
-			if start_in = '1' then
-				start_in <= '0';
-			end if;
+		if ctrl(0) = '1' then
+			status(0) <= '1';
+		end if;
+		
+		if eot_out = '1' then
+			status(0) <= '0';
 		end if;
 	end process;
-
-	process(aclk)
-	begin
-		if rising_edge(aclk) then
-			if start_out = '1' then
-				start_out <= '0';
-			end if;
-		end if;
-	end process;
-
-
+			
 
 
 end architecture rtl;
