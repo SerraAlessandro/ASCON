@@ -11,10 +11,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std_unsigned.all;
 
-library common;
-use common.axi_pkg.all;
-
-
 entity crypto_core is
   port(
     aclk:       in  std_ulogic;

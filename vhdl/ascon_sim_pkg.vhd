@@ -4,7 +4,7 @@ use std.env.all;
 library ieee;
 use ieee.std_logic_1164.all;
 
--- use work.ascon_pkg.all;
+use work.ascon_pkg.all;
 
 package ascon_sim_pkg is
 
@@ -53,13 +53,21 @@ package body ascon_sim_pkg is
     hwrite(l, t.nonce);
     writeline(output, l);
     write(l, string'("PT = "));
-    hwrite(l, t.pt.all);
+    if t.pt'length /= 0 then
+      hwrite(l, t.pt.all);
+    end if;
     writeline(output, l);
     write(l, string'("AD = "));
-    hwrite(l, t.ad.all);
+    if t.ad'length /= 0 then
+      hwrite(l, t.ad.all);
+    end if;
     writeline(output, l);
     write(l, string'("CT = "));
-    hwrite(l, t.ct.all);
+    if t.ct'length /= 0 then
+      hwrite(l, t.ct.all);
+    end if;
+    writeline(output, l);
+    write(l, string'("TAG = "));
     hwrite(l, t.tag);
     writeline(output, l);
     print("");
@@ -83,12 +91,14 @@ package body ascon_sim_pkg is
         end if;
       end loop;
     end loop;
+--    v := reverse_byte(lv);
     v := lv;
   end procedure read_hexbytestring;
 
   procedure check_ascon_pkg_p(kat_file_name: in string) is
     variable tv: test_vector_t;
-    variable pt, ct: std_ulogic_vector_ptr_t;
+    variable pt: std_ulogic_vector_ptr_t;
+    variable ct: std_ulogic_vector_ptr_t;
     variable tag: w128_t;
     variable success: boolean;
     variable pt_len, ad_len: natural;
@@ -109,7 +119,6 @@ package body ascon_sim_pkg is
       if pt_len /= 0 then
         read_hexbytestring(l, pt_len / 2, tv.pt.all);
       end if;
-      pt.all := tv.pt.all;
       read(l, ad_len);
       tv.ad := new std_ulogic_vector(4 * ad_len - 1 downto 0);
       if ad_len /= 0 then
@@ -118,26 +127,28 @@ package body ascon_sim_pkg is
       if pt_len /= 0 then
         read_hexbytestring(l, pt_len / 2, tv.ct.all);
       end if;
-      ct.all := tv.ct.all;
       read_hexbytestring(l, 16, tv.tag);
-      tag := tv.tag;
       print(tv);
-      my_ascon_enc_f(tv.ad.all, tv.pt.all, tv.key, tv.nonce, ct.all, tag);
+      ascon_enc_p(tv.key, tv.nonce, tv.ad.all, tv.pt.all, ct.all, tag);
       if ct.all /= tv.ct.all or tag /= tv.tag then
         print("ERROR ascon_enc_f returned:");
         write(l, string'("CT = "));
-        hwrite(l, ct.all);
+        if ct'length /= 0 then
+          hwrite(l, ct.all);
+        end if;
         writeline(output, l);
         write(l, string'("Tag = "));
         hwrite(l, tag);
         writeline(output, l);
         assert false severity failure;
       end if;
-      my_ascon_dec_f(tv.ad.all, tv.ct.all, tv.key, tv.nonce, tv.tag, pt.all, success);
+      ascon_dec_p(tv.key, tv.nonce, tv.ad.all, tv.ct.all, tv.tag, pt.all, success);
       if pt.all /= tv.pt.all or (not success) then
         print("ERROR ascon_dec_f returned:");
         write(l, string'("PT = "));
-        hwrite(l, pt.all);
+        if pt'length /= 0 then
+          hwrite(l, pt.all);
+        end if;
         writeline(output, l);
         write(l, string'("Success = "));
         write(l, success);
