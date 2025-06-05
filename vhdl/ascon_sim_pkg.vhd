@@ -24,9 +24,6 @@ package ascon_sim_pkg is
 
   procedure print(t: inout test_vector_t);
 
-  procedure my_ascon_enc_f(ad: in std_ulogic_vector; pt: in std_ulogic_vector; key: in w128_t; nonce: in w128_t; ct: inout std_ulogic_vector; tag: inout w128_t);
-  procedure my_ascon_dec_f(ad: in std_ulogic_vector; ct: in std_ulogic_vector; key: in w128_t; nonce: in w128_t; tag: in w128_t; pt: inout std_ulogic_vector; success: out boolean);
-
   procedure check_ascon_pkg_p(kat_file_name: in string);
 
 end package ascon_sim_pkg;
@@ -100,7 +97,6 @@ package body ascon_sim_pkg is
     variable pt: std_ulogic_vector_ptr_t;
     variable ct: std_ulogic_vector_ptr_t;
     variable tag: w128_t;
-    variable success: boolean;
     variable pt_len, ad_len: natural;
     variable l: line;
     file kat_file: text;
@@ -130,28 +126,36 @@ package body ascon_sim_pkg is
       read_hexbytestring(l, 16, tv.tag);
       print(tv);
       ascon_enc_p(tv.key, tv.nonce, tv.ad.all, tv.pt.all, ct.all, tag);
-      if ct.all /= tv.ct.all or tag /= tv.tag then
-        print("ERROR ascon_enc_f returned:");
-        write(l, string'("CT = "));
-        if ct'length /= 0 then
-          hwrite(l, ct.all);
-        end if;
-        writeline(output, l);
-        write(l, string'("Tag = "));
-        hwrite(l, tag);
+      if ct.all /= tv.ct.all then
+        write(l, string'("ERROR ascon_enc_p returned CT = "));
+        hwrite(l, ct.all);
+        write(l, string'(" instead of "));
+        hwrite(l, tv.ct.all);
         writeline(output, l);
         assert false severity failure;
       end if;
-      ascon_dec_p(tv.key, tv.nonce, tv.ad.all, tv.ct.all, tv.tag, pt.all, success);
-      if pt.all /= tv.pt.all or (not success) then
-        print("ERROR ascon_dec_f returned:");
-        write(l, string'("PT = "));
-        if pt'length /= 0 then
-          hwrite(l, pt.all);
-        end if;
+      if tag /= tv.tag then
+        write(l, string'("ERROR ascon_enc_f returned TAG = "));
+        hwrite(l, tag);
+        write(l, string'(" instead of "));
+        hwrite(l, tv.tag);
         writeline(output, l);
-        write(l, string'("Success = "));
-        write(l, success);
+        assert false severity failure;
+      end if;
+      ascon_dec_p(tv.key, tv.nonce, tv.ad.all, tv.ct.all, pt.all, tag);
+      if pt.all /= tv.pt.all then
+        write(l, string'("ERROR ascon_dec_p returned PT = "));
+        hwrite(l, pt.all);
+        write(l, string'(" instead of "));
+        hwrite(l, tv.pt.all);
+        writeline(output, l);
+        assert false severity failure;
+      end if;
+      if tag /= tv.tag then
+        write(l, string'("ERROR ascon_dec_p returned TAG = "));
+        hwrite(l, tag);
+        write(l, string'(" instead of "));
+        hwrite(l, tv.tag);
         writeline(output, l);
         assert false severity failure;
       end if;
@@ -163,14 +167,5 @@ package body ascon_sim_pkg is
     end loop;
     print("Regression test passed!");
   end procedure check_ascon_pkg_p;
-
-  procedure my_ascon_enc_f(ad: in std_ulogic_vector; pt: in std_ulogic_vector; key: in w128_t; nonce: in w128_t; ct: inout std_ulogic_vector; tag: inout w128_t) is
-  begin
-  end procedure my_ascon_enc_f;
-
-  procedure my_ascon_dec_f(ad: in std_ulogic_vector; ct: in std_ulogic_vector; key: in w128_t; nonce: in w128_t; tag: in w128_t; pt: inout std_ulogic_vector; success: out boolean) is
-  begin
-    success := true;
-  end procedure my_ascon_dec_f;
 
 end package body ascon_sim_pkg;

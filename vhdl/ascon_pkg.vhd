@@ -21,7 +21,7 @@ package ascon_pkg is
 	function ascon_p_f(state: ascon_state_t; rnd: natural range 0 to 16; i: natural range 0 to 15) return ascon_state_t;
 	function ascon_p_f_multiple (state: ascon_state_t; rnd: natural range 0 to 16; cnt: natural range 0 to 11; n_perm: natural range 0 to 4) return ascon_state_t;
   procedure ascon_enc_p (key: in std_ulogic_vector; nonce: in std_ulogic_vector; ad: in std_ulogic_vector; pt: in std_ulogic_vector; ct: out std_ulogic_vector; tag: out w128_t);
-  procedure ascon_dec_p (key: in std_ulogic_vector; nonce: in std_ulogic_vector; ad: in std_ulogic_vector; ct: in std_ulogic_vector; tag: in w128_t; pt: out std_ulogic_vector; success: out boolean);
+  procedure ascon_dec_p (key: in std_ulogic_vector; nonce: in std_ulogic_vector; ad: in std_ulogic_vector; ct: in std_ulogic_vector; pt: out std_ulogic_vector; tag: out w128_t);
 	function reverse_byte( vec : std_ulogic_vector ) return std_ulogic_vector;
 	
 end package ascon_pkg;
@@ -170,7 +170,7 @@ package body ascon_pkg is
   end procedure ascon_enc_p;
 
 
-  procedure ascon_dec_p (key: in std_ulogic_vector; nonce: in std_ulogic_vector; ad: in std_ulogic_vector; ct: in std_ulogic_vector; tag: in w128_t; pt: out std_ulogic_vector; success: out boolean) is
+  procedure ascon_dec_p (key: in std_ulogic_vector; nonce: in std_ulogic_vector; ad: in std_ulogic_vector; ct: in std_ulogic_vector; pt: out std_ulogic_vector; tag: out w128_t) is
 		constant a_len: natural := ad'length;
 		constant a_local: std_ulogic_vector(a_len - 1 downto 0) := ad;
 		constant c_len: natural := ct'length;
@@ -289,7 +289,7 @@ package body ascon_pkg is
 			T(63 downto 0) := tmp1(3) xor state(1);
 			T(127 downto 64) := tmp1(4) xor state(2);
 
-			success := tag = T;
+      tag := T;
 		
   end procedure ascon_dec_p;
 
