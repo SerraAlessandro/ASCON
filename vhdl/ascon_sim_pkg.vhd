@@ -135,7 +135,7 @@ package body ascon_sim_pkg is
         assert false severity failure;
       end if;
       if tag /= tv.tag then
-        write(l, string'("ERROR ascon_enc_f returned TAG = "));
+        write(l, string'("ERROR ascon_enc_p returned TAG = "));
         hwrite(l, tag);
         write(l, string'(" instead of "));
         hwrite(l, tv.tag);
