@@ -1,3 +1,7 @@
 /build/
 /vhdl/kat_pkg.vhd
 .*.swp
+work/
+xsim.dir/
+xvlog.log
+xvlog.pb
