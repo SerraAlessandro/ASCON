@@ -212,36 +212,38 @@ package body ascon_pkg is
 
 -- ******************** ASSOCIATED DATA ********************	
 
-			while (a_len - 128*ad_words > 128) loop
-				ad_tmp := a_local((128*(ad_words+1))-1 downto 128*ad_words);
-				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
-				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
-				ad_processing: for j in 0 to 7 loop
-					tmp1 := ascon_p_f(tmp1,8,j);
-				end loop ad_processing;
-				ad_words := ad_words + 1;
-			end loop;
+			if a_len /= 0 then
+				while (a_len - 128*ad_words > 128) loop
+					ad_tmp := a_local((128*(ad_words+1))-1 downto 128*ad_words);
+					tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+					tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+					ad_processing: for j in 0 to 7 loop
+						tmp1 := ascon_p_f(tmp1,8,j);
+					end loop ad_processing;
+					ad_words := ad_words + 1;
+				end loop;
 
-			if (a_len -(128*(ad_words+1)) = 0) then
-				ad_tmp := a_local((128*(ad_words+1))-1 downto 128*ad_words);
+				if (a_len -(128*(ad_words+1)) = 0) then
+					ad_tmp := a_local((128*(ad_words+1))-1 downto 128*ad_words);
+					tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+					tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+					ad_processing_last_full: for j in 0 to 7 loop
+						tmp1 := ascon_p_f(tmp1,8,j);
+					end loop ad_processing_last_full;
+					ad_tmp := x"00000000000000000000000000000001";
+				else
+					ad_tmp := x"00000000000000000000000000000000";
+					ad_tmp(8 + a_len - 1 - 128*ad_words downto 0) := x"01" & a_local(a_len - 1 downto 128*ad_words);
+				end if;
+
 				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
 				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
-				ad_processing_last_full: for j in 0 to 7 loop
+
+				ad_processing_last: for j in 0 to 7 loop
 					tmp1 := ascon_p_f(tmp1,8,j);
-				end loop ad_processing_last_full;
-				ad_tmp := x"00000000000000000000000000000001";
-			else
-				ad_tmp := x"00000000000000000000000000000000";
-				ad_tmp(8 + a_len - 1 - 128*ad_words downto 0) := x"01" & a_local(a_len - 1 downto 128*ad_words);
+				end loop ad_processing_last;
 			end if;
-
-			tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
-			tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
-
-			ad_processing_last: for j in 0 to 7 loop
-				tmp1 := ascon_p_f(tmp1,8,j);
-			end loop ad_processing_last;
-	
+		
 			tmp1(4)(63) := tmp1(4)(63) xor '1';
 		
 -- ******************** CYPHERTEXT ********************
