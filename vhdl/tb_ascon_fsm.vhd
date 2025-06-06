@@ -2,10 +2,6 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 
 ENTITY tb_ASCON_fsm IS
-END tb_ASCON_fsm;
-
-ARCHITECTURE behavior OF tb_ASCON_fsm IS
-component ASCON_fsm is
 	generic( n_perm : natural := 4);
 	port(		key: in std_ulogic_vector(127 downto 0);
 			nonce: in std_ulogic_vector(127 downto 0);
@@ -25,7 +21,12 @@ component ASCON_fsm is
 			tag: out std_ulogic_vector(127 downto 0);
 			axi_stream_output: out std_ulogic_vector(127 downto 0)
 			);
-end component;
+END entity tb_ASCON_fsm;
+
+ARCHITECTURE sim OF tb_ASCON_fsm IS
+
+	
+
 signal key: std_ulogic_vector(127 downto 0);
 signal nonce: std_ulogic_vector(127 downto 0);
 signal axi_stream_input: std_ulogic_vector(127 downto 0);
@@ -56,6 +57,26 @@ signal tag_ready: std_ulogic;
  
 begin
 
+ascon: entity work.ASCON_fsm(rtl)
+	generic map( n_perm => n_perm);
+	port(		key => key,
+			nonce => nonce,
+			axi_stream_input => axi_stream_input,
+			clk => clk,
+			rstn => rstn,
+			s0_data_ack => s0_data_ack,
+			s0_data_req => s0_data_req,
+			s0_new_data => s0_new_data,
+			s0_last_data => s0_last_data,
+			s0_no_data => s0_no_data,
+			m0_data_ready => m0_data_ready,
+			m0_new_data => m0_new_data,
+			m0_last_data => m0_last_data,
+			tag_valid => tag_valid,
+			tag_ready => tag_ready,
+			tag => tag,
+			axi_stream_output => axi_stream_output);
+			);
 
 
 key <= x"abc5472b56742bca3675cbef47956338";
@@ -125,4 +146,4 @@ ascon : ASCON_fsm port map (
 				tag_ready => tag_ready,
 				tag => tag,
 				axi_stream_output => axi_stream_output);
-end behavior;
+end architecture sim;
