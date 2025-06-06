@@ -21,8 +21,6 @@ entity ASCON_fsm is
 			m0_last_data: out std_ulogic;
 			tag_valid: out std_ulogic;
 			tag_ready: in std_ulogic;
-			p128_out: out std_ulogic_vector(127 downto 0);
-			p192_out: out std_ulogic_vector(191 downto 0);
 			tag: out std_ulogic_vector(127 downto 0);
 			axi_stream_output: out std_ulogic_vector(127 downto 0)
 			);
@@ -58,6 +56,13 @@ signal sel_out_128: std_ulogic;
 signal sel_out_192: std_ulogic;
 signal ad_end: std_ulogic;
 signal ad_last: std_ulogic;
+signal key_rev: std_ulogic_vector(127 downto 0);
+signal nonce_rev: std_ulogic_vector(127 downto 0);
+signal axi_input_rev: std_ulogic_vector(127 downto 0);
+signal axi_output_rev: std_ulogic_vector(127 downto 0);
+signal tag_rev: std_ulogic_vector(127 downto 0);
+signal p192_out: std_ulogic_vector(191 downto 0);
+signal p128_out: std_ulogic_vector(127 downto 0);
 
 type state_type is (	idle, 
 			init_first, 
@@ -87,6 +92,14 @@ signal state : state_type;
 
 
 begin
+
+	key_rev <= reverse_byte(key);
+	nonce_rev <= reverse_byte(nonce);
+	axi_input_rev <= reverse_byte(axi_stream_input);
+	tag <= reverse_byte(tag_rev);
+	axi_stream_output <= reverse_byte(axi_output_rev);
+	
+	
 	
 	reg_128: process(clk)
 	begin
@@ -140,19 +153,19 @@ begin
        end if;
    end process counter;
 	
-	reg128_in <= 	key(63 downto 0) & x"00001000808c0001" when sel_128 = "11" else 
+	reg128_in <= 	key_rev(63 downto 0) & x"00001000808c0001" when sel_128 = "11" else 
 						mux_p128 when sel_128 = "00" else
-						axi_stream_input xor mux_p128 when sel_128 = "01" else
-						axi_stream_input xor mux_p128 when sel_128 = "10";
+						axi_input_rev xor mux_p128 when sel_128 = "01" else
+						axi_input_rev xor mux_p128 when sel_128 = "10";
 	
-	reg192_in <= 	nonce & key(127 downto 64) when sel_192 = "11" else 
+	reg192_in <= 	nonce_rev & key_rev(127 downto 64) when sel_192 = "11" else 
 						(mux_p192(191 downto 191) xor ad_last) & mux_p192(190 downto 0) when sel_192 = "00" else
-						(x"0000000000000000" & key) xor mux_p192 when sel_192  = "10" else
-						((key(127 downto 127) xor ad_last) & key(126 downto 0) & x"0000000000000000") xor mux_p192 when sel_192 = "01";
+						(x"0000000000000000" & key_rev) xor mux_p192 when sel_192  = "10" else
+						((key_rev(127 downto 127) xor ad_last) & key_rev(126 downto 0) & x"0000000000000000") xor mux_p192 when sel_192 = "01";
 	
-	axi_stream_output <= axi_stream_input xor mux_p128;
+	axi_output_rev <= axi_input_rev xor mux_p128;
 
-	tag <= p192_out(191 downto 64) xor key;
+	tag_rev <= p192_out(191 downto 64) xor key_rev;
 	
 	state_in(0) <= reg128_out(63 downto 0);
 	state_in(1) <= reg128_out(127 downto 64);
@@ -334,6 +347,8 @@ begin
 		ad_last <= '0';
 		rnd <= 12;
 		tag_valid <= '0';	
+		m0_new_data <= '0';
+		m0_last_data <= '0';
 
 		case state is
 			when idle =>
