@@ -11,4 +11,5 @@ tb_ascon_fsm: ascon_pkg ascon_fsm
 crypto_core: ascon_fsm axi_stream_slave axi_stream_master
 axi_lite_interface: axi_pkg
 top_for_zybo: dma_in dma_out axi_lite_interface crypto_core
-top_for_zybo_sim: axi_pkg rnd_pkg utils_pkg axi_memory top_for_zybo
+top_for_zybo_sim: axi_pkg rnd_pkg utils_pkg axi_memory ascon_sim_pkg top_for_zybo
+tb_axi_lite_interface: axi_lite_interface

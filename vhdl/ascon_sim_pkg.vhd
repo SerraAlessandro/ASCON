@@ -23,7 +23,7 @@ package ascon_sim_pkg is
   end record;
 
   procedure print(t: inout test_vector_t);
-
+  procedure read_hexbytestring(l: inout line; len: in natural; v: out std_ulogic_vector);
   procedure check_ascon_pkg_p(kat_file_name: in string);
 
 end package ascon_sim_pkg;
