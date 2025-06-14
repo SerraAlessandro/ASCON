@@ -79,7 +79,7 @@ procedure ascon_enc_p (key: in std_ulogic_vector; nonce: in std_ulogic_vector; a
 
 The inputs are the key, nonce, associated data and plaintext. The outputs are the cyphertext and the tag.
 
-In order to make the procedure as general as possible, a local version of each input is used, and declared as (n downto 0). In this way, the procedure will work even if the original inputs are defined as (0 to n). 
+In order to make the procedure as general as possible, a local version of each input is used, and declared as (n downto 0). In this way, the procedure will work even if the original inputs are defined as (0 to n). In addition, the reverse_byte version of the inputs gets used, in order to be consistent with the algorithm. 
 
 The expected length of key and nonce is 128 bits, while ad and pt can have any bit length as long as they are an integer number of bytes (0 bits, 8 bits, 16 bits, 24 bits, ...).
 
@@ -179,6 +179,82 @@ If the unprocessed part of the associated data is exactly 128 bit long, then it'
 This happens because, if the length of the entire associated data is a multiple of 128 bits, the padding will end up in a new 128bit block rather than being simply appended inside last block of the associated data.
 
 If the unprocessed part of the associated data is less than 128 bit long, then the padding gets appended to it and the block gets processed as usual.
+
+```
+-- ******************** PLAINTEXT ********************
+
+			while (p_len - 128*pt_words > 128) loop
+				pt_tmp := p_local((128*(pt_words+1))-1 downto 128*pt_words);
+				tmp1(0) := tmp1(0) xor pt_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor pt_tmp(127 downto 64);
+				ct((128*(pt_words+1))-1 downto 128*pt_words) := tmp1(1) & tmp1(0);
+				pt_processing: for j in 0 to 7 loop
+					tmp1 := ascon_p_f(tmp1,8,j);
+				end loop pt_processing;
+				pt_words := pt_words + 1;
+			end loop;
+```
+This code handles the full 128 bit words of the plaintext when the remaining unprocessed part is longer than 128 bits, and it outputs the respective cyphertext 128 bits words.
+
+```
+			if (p_len -(128*(pt_words+1)) = 0) then
+				pt_tmp := p_local((128*(pt_words+1))-1 downto 128*pt_words);
+				tmp1(0) := tmp1(0) xor pt_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor pt_tmp(127 downto 64);
+				ct((128*(pt_words+1))-1 downto 128*pt_words) := tmp1(1) & tmp1(0);
+				pt_processing_last_full: for j in 0 to 7 loop
+					tmp1 := ascon_p_f(tmp1,8,j);
+				end loop pt_processing_last_full;
+				pt_tmp := x"00000000000000000000000000000001";
+				tmp1(0) := tmp1(0) xor pt_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor pt_tmp(127 downto 64);
+			else
+				pt_tmp := x"00000000000000000000000000000000";
+				pt_tmp(8 + p_len - 1 - 128*pt_words downto 0) := x"01" & p_local(p_len - 1 downto 128*pt_words);
+				tmp1(0) := tmp1(0) xor pt_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor pt_tmp(127 downto 64);
+				tmp12 := tmp1(1) & tmp1(0);
+				ct(p_len-1 downto 128*pt_words) := tmp12(p_len-1-128*pt_words downto 0);
+			end if;
+
+			ct := reverse_byte(ct);
+```
+When the unprocessed part of the plaintext is exactly 128 bits long, the 128 block gets processed in the standard way, and the 128 least significant bits of the state that enter the finalization part of the algorithm are a vector of 127 '0' and a '1'.
+
+If instead the length of the remaining part of the plaintext is different than 128 bits, there is no more permutation round, the remaining part gets padded and the last part of the cyphertext gets added.
+
+```
+-- ******************** FINALIZATION ********************
+
+			tmp1(2) := tmp1(2) xor state(1);
+			tmp1(3) := tmp1(3) xor state(2);
+
+			fin: for j in 0 to 11 loop
+				tmp1 := ascon_p_f(tmp1,12,j);
+			end loop fin;
+			
+			T(63 downto 0) := tmp1(3) xor state(1);
+			T(127 downto 64) := tmp1(4) xor state(2);
+
+			tag := reverse_byte(T);
+			
+  end procedure ascon_enc_p;
+```
+This is the code for the finalization part of the algorithm.
+The procedure will return the reverse_byte of ct and T.
+
+The procedure for the decryption (`ascon_dec_p`), is handled in a similar way as the encryption.
+
+## Testing of the ascon_pkg functions 
+
+To test the functions and procedures inside the package:
+```bash
+cd ASCON
+make ascon_pkg_sim.sim
+```
+
+
+
 
 
 ## Using `ascon_enc_f` and `ascon_dec_f`
