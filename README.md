@@ -194,6 +194,8 @@ If the unprocessed part of the associated data is less than 128 bit long, then t
 				pt_words := pt_words + 1;
 			end loop;
 ```
+Just like the associated data, also the plaintext is processed in blocks of 128 bits, that get handled in a similar way as AD.
+
 This code handles the full 128 bit words of the plaintext when the remaining unprocessed part is longer than 128 bits, and it outputs the respective cyphertext 128 bits words.
 
 ```
