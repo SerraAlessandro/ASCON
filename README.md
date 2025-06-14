@@ -23,6 +23,163 @@ ctest --test-dir build
 
 Known Answer Tests results should be in `build/build/LWC_AEAD_KAT_128_128.txt`
 
+The C reference results will be used to test the encryption and decryption functions inside the Ascon package
+
+## Ascon package
+The file ascon_pkg.vhd contains the following functions (and procedures): 
+- **single permutation functions**
+  
+  A single iteration of the Ascon algorithm is composed in 3 steps: Pc (constant addiction layer), Ps (substitution layer) and Pl (linear diffusion layer), each step is processed inside a function:
+  - `ascon_pc_f`
+  - `ascon_ps_f`
+  - `ascon_pl_f`
+  
+  The 3 functions are jointed together inside the `ascon_p_f` function.
+
+- **multiple permutations function**
+  
+  The `ascon_p_f_multiple` function is used to process multiple Ascon permutations, this will be used for the `ascon_enc_p` and `ascon_dec_p` procedures, aswell as the **crypto_core**.
+  
+  The ascon_p_f_multiple function is the hyerarchically highest function that will be used inside the synthesizable implementation of the Ascon algorithm, since it is still fully combinatorial.
+
+- **byte reverse**
+  
+  The `reverse_byte` function is used to switch from big endian to small endian and vice versa. This function is needed to provide the proper input and output of the `ascon_enc_p` and `ascon_dec_p` procedure, aswell as the **crypto_core**.
+
+- **encryption**
+  
+  The `ascon_enc_p` procedure processes the full Ascon encryption, considering all possible lenghts of Associated data and Plaintext
+
+- **decryption**
+
+  The `ascon_dec_p` procedure processes the full Ascon decryption, consdiering all possible lenghts of Associated data and Cyphertext
+
+## In depth explanation of the `ascon_enc_p` procedure
+```bash
+procedure ascon_enc_p (key: in std_ulogic_vector; nonce: in std_ulogic_vector; ad: in std_ulogic_vector; pt: in std_ulogic_vector; ct: out std_ulogic_vector; tag: out w128_t) is
+
+		constant a_len: natural := ad'length;
+		constant a_local: std_ulogic_vector(a_len - 1 downto 0) := reverse_byte(ad);
+		constant p_len: natural := pt'length;
+		constant p_local: std_ulogic_vector(p_len - 1 downto 0) := reverse_byte(pt);
+		constant k_len: natural := key'length;
+		constant k_local: std_ulogic_vector(k_len - 1 downto 0) := reverse_byte(key);
+		constant n_len: natural := nonce'length;
+		constant n_local: std_ulogic_vector(n_len - 1 downto 0) := reverse_byte(nonce);
+		constant iv: std_ulogic_vector(63 downto 0) := x"00001000808c0001";
+
+		variable state: ascon_state_t;
+		variable tmp1: ascon_state_t;
+		variable k,n: w128_t;
+		variable tmp12: w128_t;
+		variable ad_tmp, pt_tmp: w128_t;
+		variable ad_words,pt_words: natural := 0;
+		variable T: w128_t;
+```
+
+The inputs are the key, nonce, associated data and plaintext. The outputs are the cyphertext and the tag.
+
+In order to make the procedure as general as possible, a local version of each input is used, and declared as (n downto 0). In this way, the procedure will work even if the original inputs are defined as (0 to n). 
+
+The expected length of key and nonce is 128 bits, while ad and pt can have any bit length as long as they are an integer number of bytes (0 bits, 8 bits, 16 bits, 24 bits, ...).
+
+```bash
+begin
+			
+			state(0) := iv;
+			state(1) := k_local(63 downto 0);
+			state(2) := k_local(127 downto 64);
+			state(3) := n_local(63 downto 0);
+			state(4) := n_local(127 downto 64);
+			tmp1 := state;
+```
+
+This is the initialization of the 320 bits state.
+
+The state is defined as (0 to 4), but the key and the nonce inside must be defined as (n downto 0), in order to be consistent with the algorithm.
+
+```
+-- ******************** INITIALIZATION ********************
+			
+			init: for j in 0 to 11 loop
+				tmp1 := ascon_p_f(tmp1,12,j);
+			end loop init;
+
+			tmp1(3) := tmp1(3) xor state(1);
+			tmp1(4) := tmp1(4) xor state(2);
+```
+
+This is the initialization part of the Ascon algorithm, in which 12 rounds of permutations are always performed.
+
+```
+-- ******************** ASSOCIATED DATA ********************	
+			if a_len /= 0 then
+				while (a_len - 128*ad_words > 128) loop
+					ad_tmp := a_local((128*(ad_words+1))-1 downto 128*ad_words);
+					tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+					tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+					ad_processing: for j in 0 to 7 loop
+						tmp1 := ascon_p_f(tmp1,8,j);
+					end loop ad_processing;
+					ad_words := ad_words + 1;
+				end loop;
+```
+This is the first part of the code that handles the associated data. 
+
+Having associated data is not mandatory, and this is handled by the outher if statement.
+
+The associated data is proessed in blocks of 128 bits, the while loop is used in case the total length of AD exceeeds 128 bits, meaning multiple associated data processes are needed.
+
+After the first 128bits have been processed, if the remaining part of AD is longer than 128 bits, the loop is repeated, until the remaining part of AD is shorted or equal to 128 bits. To make it more clear:
+
+| bit length of AD    | how many full 128 blocks       | how many times the loop is repeated |
+|---------------------|--------------------------------|-------------------------------------|
+| 0  		      | 0 			       | 0                                   |
+| 16  		      | 0 			       | 0                                   |
+| 128  		      | 1 			       | 0                                   |
+| 136  		      | 1 			       | 1                                   |
+| 192  		      | 1 			       | 1                                   |
+| 448  		      | 3 			       | 3                                   |
+
+
+
+The last remaining part of the associated data is handled differently, because the algorithm includes the padding, which means adding a certain number of '0' followed by a '1' to the upper part of the still unprocessed slice of the associated data, to make it so that the padded version of the remaining AD is 128 bits long. For example:
+
+| remaining part of AD to process   | word to be added               | final word (127 downto 0)	     |
+|---------------------------------- |--------------------------------|---------------------------------------|
+| x"58127865297adc3544187654326787" | x"01" 		             | x"0158127865297adc3544187654326787"   |
+| x"58127865297adc35441876543267"   | x"0001"		             | x"000158127865297adc35441876543267"   |
+| x"58127865"  		            | x"000000000000000000000001"    | x"00000000000000000000000158127865"   |
+
+```
+				if (a_len -(128*(ad_words+1)) = 0) then
+					ad_tmp := a_local((128*(ad_words+1))-1 downto 128*ad_words);
+					tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+					tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+					ad_processing_last_full: for j in 0 to 7 loop
+						tmp1 := ascon_p_f(tmp1,8,j);
+					end loop ad_processing_last_full;
+					ad_tmp := x"00000000000000000000000000000001";
+				else
+					ad_tmp := x"00000000000000000000000000000000";
+					ad_tmp(8 + a_len - 1 - 128*ad_words downto 0) := x"01" & a_local(a_len - 1 downto 128*ad_words);
+				end if;
+				tmp1(0) := tmp1(0) xor ad_tmp(63 downto 0);
+				tmp1(1) := tmp1(1) xor ad_tmp(127 downto 64);
+
+				ad_processing_last: for j in 0 to 7 loop
+					tmp1 := ascon_p_f(tmp1,8,j);
+				end loop ad_processing_last;
+			end if;
+		
+			tmp1(4)(63) := tmp1(4)(63) xor '1';
+```
+If the unprocessed part of the associated data is exactly 128 bit long, then it's needed to process the full 128 bit block as usual, and then re-run the xor plus 8-permutations for a 128 bit block that is all '0' except for the least significant bit.
+
+This happens because, if the length of the entire associated data is a multiple of 128 bits, the padding will end up in a new 128bit block rather than being simply appended inside last block of the associated data.
+
+If the unprocessed part of the associated data is less than 128 bit long, then the padding gets appended to it and the block gets processed as usual.
+
 
 ## Using `ascon_enc_f` and `ascon_dec_f`
 
