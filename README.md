@@ -255,6 +255,12 @@ cd ASCON
 make ascon_pkg_sim.sim
 ```
 
+## Ascon_fsm
+
+![ASCON FSM architecture](images/ascon_fsm.png)
+
+
+`ascon_fsm.vhd` contains the code of the actual hardware accelerator that performs the encryption
 
 
 
