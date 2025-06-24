@@ -806,7 +806,7 @@ vsim -voptargs="+acc" tb_ascon_fsm
 ### Simulation result
 
 From the official python implementation:
-
+```
 key:        0xabc5472b56742bca3675cbef47956338 (16 bytes)
 nonce:      0x2c66b325ae354f7804658cdfe43645af (16 bytes)
 plaintext:  0xfeb45ab41265432cde653dfeda543f4547658136513ad436778fedc9875430 (31 bytes)
@@ -814,7 +814,7 @@ ass.data:   0x45bc627ad055be54fa4393fed679041245bc627ad055beb5fa4397fed9790a (31
 ciphertext: 0x2b444a01ad005f98dd48fc9a3bdf2d6d9d6195874cb802f44bb1bb16677db8 (31 bytes)
 tag:        0x3951082ad157d3bea812fdc7ef90c65d (16 bytes)
 received:   0xfeb45ab41265432cde653dfeda543f4547658136513ad436778fedc9875430 (31 bytes)
-
+```
 Here are the result obtained from the testbench:
 ![ASCON FSM tb1](images/tb_ascon1.png)
 *first 128 bit slice of the ciphertext*
@@ -822,6 +822,266 @@ Here are the result obtained from the testbench:
 *second 128 bit slice of fthe ciphertext*
 ![ASCON FSM tb3](images/tb_ascon3.png)
 *tag result*
+
+
+## Axi_slave_write
+![slave_interface](images/arch_axi_slave.png)
+
+
+Interface that gets information (Associated data and Plaintext) from the Dma_in and provides it to Ascon_fsm.
+
+The interface works as follows:
+
+- From the axi stream there will be data arriving from the Dma_in in 32-bit chunks
+- The 32-bit chunks get stored inside the shift_register and once 4 32-bit words arrive, a new 128-bit word is ready to be used by the Ascon_fsm, and it will be stored until Ascon_fsm requests new data through the `Data_req` signal
+- Due to the way the Plaintext is handled by the algorithm, it is necessary to communicate to the Ascon_fsm which 128-bit word is the last, this is done through the `last_data` signal
+- In order to handle the `no Associated data` case, if the Dma_in asserts `tlast` to '1' and it is not the **forth** 32-bit word that gets communicated, then it is considered as the `no Associated data` case 
+
+### Code explanation
+
+```
+entity axi_stream_slave is
+	port(	information: in std_ulogic_vector(31 downto 0);
+		clk: in std_ulogic; 
+		tvalid: in std_ulogic;
+		tlast: in std_ulogic;
+		data_ack: in std_ulogic;
+		aresetn: in std_ulogic;
+		data_req: in std_ulogic;
+		info_128: out std_ulogic_vector(127 downto 0);
+		new_data: out std_ulogic;
+		last_data: out std_ulogic;
+		tready: out std_ulogic;
+		no_data: out std_ulogic
+			);
+end axi_stream_slave;
+```
+
+```
+	input_reg: process(clk)
+	begin
+		if(clk'event and clk = '1') then
+			info_delay <= information;
+		end if;
+	end process;
+
+	shift_Reg: process(clk)
+	begin
+	  if(clk'event and clk = '1') then
+			if shift_r = '1' then
+				 s_out <= (others => '0');
+			elsif shift_e = '1'  then
+				 s_out <= info_delay & s_out(127 downto 32);
+			end if;
+	  end if;
+	end process;
+
+```
+
+
+```
+	counter: process(clk)
+   begin
+       if rising_edge(clk) then
+           if (count_r = '1') then
+               cnt <= 0;
+           elsif (count_e = '1') then
+					if (cnt < 4) then
+						cnt <= cnt + 1;
+					end if;
+           end if;
+       end if;
+   end process;
+	
+	info_128 <= s_out;
+```
+
+```
+
+	state_trans: process (clk)
+	begin
+		if (Clk'event and Clk = '1') then
+			if (aresetn = '0') then
+				state <= idle;
+			else
+				case state is
+					when idle =>
+						if (data_req = '1') then
+							state <= ready;
+						else
+							state <= idle;
+						end if;
+						
+					when ready =>
+						if (tvalid = '1') then
+							if (tlast = '1') then
+								if ((cnt = 2 and contin = '1') or (cnt = 3 and contin = '0')) then
+									state <= shift_last;
+								else
+									state <= no_tx;
+								end if;
+							else
+								state <= shift;
+							end if;
+						else
+							state <= ready;
+						end if;
+						
+					when shift =>
+						if (cnt = 3) then
+							state <= send;
+						else
+							if (tvalid = '1') then
+								if (tlast = '1') then
+									if ((cnt = 2 and contin = '1') or (cnt = 3 and contin = '0')) then
+										state <= shift_last;
+									else
+										state <= no_tx;
+									end if;
+								else
+									state <= shift;
+								end if;
+							else
+								state <= ready;
+							end if;
+						end if;
+						
+					when send =>
+						if (data_ack = '1') then
+							state <= idle;
+						else
+							state <= send;
+						end if;
+									
+					when send_last =>
+						if (data_ack = '1') then
+							state <= idle;
+						else
+							state <= send_last;
+						end if;
+						
+					when no_tx =>
+						if (data_ack = '1') then
+							state <= idle;
+						else
+							state <= no_tx;
+						end if;
+						
+					when shift_last =>
+						state <= send_last;
+						
+					when others =>
+						state <= idle;
+				end case;
+			end if;
+		end if;
+	end process;
+```
+
+```
+
+	output_p: process(state)
+	begin
+		new_data <= '0';
+		last_data <= '0';
+		count_e <= '0';
+		count_r <= '0';
+		shift_e <= '0';
+		shift_r <= '0';
+		tready <= '0';
+		no_data <= '0';
+		contin <= '0';
+
+		case state is 
+			when idle =>
+				shift_r <= '1';
+				count_r <= '1';
+			when ready =>
+				tready <= '1';
+			when shift =>
+				count_e <= '1';
+				shift_e <= '1';
+				tready <= '1';
+				contin <= '1';
+			when shift_last =>
+				count_e <= '1';
+				shift_e <= '1';
+				tready <= '1';
+			when send =>
+				new_data <= '1';
+			when send_last =>
+				new_data <= '1';
+				last_data <= '1';
+			when no_tx =>
+				no_data <= '1';
+			
+		end case;
+	end process;
+```
+
+
+## The AXI lite control interface
+
+The address mapping of this AXI lite control interface is the following:
+
+| Name       | Byte offset   | Byte length | Description                     |
+| :----      | :----         | :----       | :----                           |
+| `KEY`      | 0-15          | 16          | Secret key                      |
+| `NONCE`    | 16-31         | 16          | Nonce                           |
+| `TAG`      | 32-47         | 16          | Tag                             |
+| `ADDR_IN`  | 48-51         | 4           | Input starting address          |
+| `LEN_IN`   | 52-55         | 4           | Input length (in 32 bits words) |
+| `ADDR_OUT` | 56-59         | 4           | Output starting address         |
+| `CTRL`     | 60-63         | 4           | Control register                |
+| `STATUS`   | 64-67         | 4           | Status register                 |
+| `-`        | 68-4095       | 4028        | Unmapped                        |
+
+Only 4-bytes aligned accesses are supported.
+Read or write accesses at unaligned addresses return a `SLVERR` response and have no other effect.
+Writing the `TAG` region returns a `SLVERR` response and has no other effect.
+Writing in the unmapped region returns a `DECERR` response and has no other effect.
+
+The two Least Significant Bits (LSB) of `ADDR_IN` and `ADDR_OUT` are hard-wired to 0; writing them has no effect.
+This guarantees the memory alignment of the starting addresses on 4 bytes boundaries.
+
+The two Most Significant Bits (MSB) of `LEN_IN` are hard-wired to 0; writing them has no effect.
+This guarantees a maximum input length of 4 GB.
+
+The layout of the 32-bits CTRL register is the following:
+
+| Name        | Bit range     | Bit width   | Description              |
+| :----       | :----         | :----       | :----                    |
+| `START_IN`  | 0-0           | 1           | DMA input start command  |
+| `START_OUT` | 1-1           | 1           | DMA output start command |
+| `-`         | 31-2          | 30          | Reserved                 |
+
+- Writing a 1 in `START_IN` launches the input DMA if the DMA engine is available, else this has no effect.
+  The flag is automatically cleared on the following rising edge of the clock.
+- Writing a 1 in `START_OUT` launches the output DMA if the DMA engine is available, else this has no effect.
+  The flag is automatically cleared on the following rising edge of the clock.
+
+Writing the other bits has no effect; they read as zero.
+
+The layout of the 32-bits STATUS register is the following:
+
+| Name        | Bit range     | Bit width   | Description                |
+| :----       | :----         | :----       | :----                      |
+| `BUSY`      | 0-0           | 1           | Busy flag                  |
+| `ERR_IN`    | 2-1           | 2           | Input transfer error code  |
+| `ERR_OUT`   | 4-3           | 2           | Output transfer error code |
+| `-`         | 31-5          | 27          | Reserved                   |
+
+- The `BUSY` flag is automatically set to 1 when a 1 is written to `START_IN`.
+  It is automatically set to 0 when an output DMA transfer ends.
+- The `ERR_IN` field contains the last non-OKAY AXI read response from the memory during an input DMA transfer, or OKAY if there was no error.
+- The `ERR_OUT` field contains the last non-OKAY AXI write response from the memory during an output DMA transfer, or OKAY if there was no error.
+
+`ERR_IN` and `ERR_OUT` are cleared-on-set: when writing to `STATUS`, bits of `ERR_IN` and `ERR_OUT` are set to 0 if they are written a 1.
+The other written bits are ignored.
+The reserved bits read as zero.
+
+
+
 
 ## Using `ascon_enc_f` and `ascon_dec_f`
 
@@ -960,67 +1220,12 @@ By reading it from address 0x20, it is already in the correct format.
 ## Encryption hardware schematics
 ![encryption schematics](encryption_schematics.jpg)
 
+
+
+
+
 # ASCON on Zybo
 
 The Zybo version of the ASCON accelerator comprises DMA engines for memory-to-crypto and crypto-to-memory transfers.
 It communicates with the software stack through a AXI lite control interface used to provide a secret key and a nonce, to read out the authentication tag, to configure and control the DMA engines and to read status information.
 
-## The AXI lite control interface
-
-The address mapping of this AXI lite control interface is the following:
-
-| Name       | Byte offset   | Byte length | Description                     |
-| :----      | :----         | :----       | :----                           |
-| `KEY`      | 0-15          | 16          | Secret key                      |
-| `NONCE`    | 16-31         | 16          | Nonce                           |
-| `TAG`      | 32-47         | 16          | Tag                             |
-| `ADDR_IN`  | 48-51         | 4           | Input starting address          |
-| `LEN_IN`   | 52-55         | 4           | Input length (in 32 bits words) |
-| `ADDR_OUT` | 56-59         | 4           | Output starting address         |
-| `CTRL`     | 60-63         | 4           | Control register                |
-| `STATUS`   | 64-67         | 4           | Status register                 |
-| `-`        | 68-4095       | 4028        | Unmapped                        |
-
-Only 4-bytes aligned accesses are supported.
-Read or write accesses at unaligned addresses return a `SLVERR` response and have no other effect.
-Writing the `TAG` region returns a `SLVERR` response and has no other effect.
-Writing in the unmapped region returns a `DECERR` response and has no other effect.
-
-The two Least Significant Bits (LSB) of `ADDR_IN` and `ADDR_OUT` are hard-wired to 0; writing them has no effect.
-This guarantees the memory alignment of the starting addresses on 4 bytes boundaries.
-
-The two Most Significant Bits (MSB) of `LEN_IN` are hard-wired to 0; writing them has no effect.
-This guarantees a maximum input length of 4 GB.
-
-The layout of the 32-bits CTRL register is the following:
-
-| Name        | Bit range     | Bit width   | Description              |
-| :----       | :----         | :----       | :----                    |
-| `START_IN`  | 0-0           | 1           | DMA input start command  |
-| `START_OUT` | 1-1           | 1           | DMA output start command |
-| `-`         | 31-2          | 30          | Reserved                 |
-
-- Writing a 1 in `START_IN` launches the input DMA if the DMA engine is available, else this has no effect.
-  The flag is automatically cleared on the following rising edge of the clock.
-- Writing a 1 in `START_OUT` launches the output DMA if the DMA engine is available, else this has no effect.
-  The flag is automatically cleared on the following rising edge of the clock.
-
-Writing the other bits has no effect; they read as zero.
-
-The layout of the 32-bits STATUS register is the following:
-
-| Name        | Bit range     | Bit width   | Description                |
-| :----       | :----         | :----       | :----                      |
-| `BUSY`      | 0-0           | 1           | Busy flag                  |
-| `ERR_IN`    | 2-1           | 2           | Input transfer error code  |
-| `ERR_OUT`   | 4-3           | 2           | Output transfer error code |
-| `-`         | 31-5          | 27          | Reserved                   |
-
-- The `BUSY` flag is automatically set to 1 when a 1 is written to `START_IN`.
-  It is automatically set to 0 when an output DMA transfer ends.
-- The `ERR_IN` field contains the last non-OKAY AXI read response from the memory during an input DMA transfer, or OKAY if there was no error.
-- The `ERR_OUT` field contains the last non-OKAY AXI write response from the memory during an output DMA transfer, or OKAY if there was no error.
-
-`ERR_IN` and `ERR_OUT` are cleared-on-set: when writing to `STATUS`, bits of `ERR_IN` and `ERR_OUT` are set to 0 if they are written a 1.
-The other written bits are ignored.
-The reserved bits read as zero.
