@@ -793,8 +793,35 @@ There are two blocks:
 When `tag_valid` is asserted to '1', then the value of **Tag** is ready in the output `tag`.
 
 when `m0_new_data` is asserted to '1', then the current 128 bit slice of the **Cyphertext** is ready in the output `axi_stream_output`.
- 
 
+To run the simulation, inside the vhdl folder, compile the file and then simulate with Modelsim:
+
+```
+vcom -2008 +acc ascon_pkg.vhd
+vcom -2008 +acc ascon_fsm.vhd
+vcom -2008 +acc tb_ascon_fsm.vhd
+vsim -voptargs="+acc" tb_ascon_fsm
+
+```
+### Simulation result
+
+From the official python implementation:
+
+key:        0xabc5472b56742bca3675cbef47956338 (16 bytes)
+nonce:      0x2c66b325ae354f7804658cdfe43645af (16 bytes)
+plaintext:  0xfeb45ab41265432cde653dfeda543f4547658136513ad436778fedc9875430 (31 bytes)
+ass.data:   0x45bc627ad055be54fa4393fed679041245bc627ad055beb5fa4397fed9790a (31 bytes)
+ciphertext: 0x2b444a01ad005f98dd48fc9a3bdf2d6d9d6195874cb802f44bb1bb16677db8 (31 bytes)
+tag:        0x3951082ad157d3bea812fdc7ef90c65d (16 bytes)
+received:   0xfeb45ab41265432cde653dfeda543f4547658136513ad436778fedc9875430 (31 bytes)
+
+Here are the result obtained from the testbench:
+![ASCON FSM tb1](images/tb_ascon1.png)
+*first 128 bit slice of the ciphertext*
+![ASCON FSM tb2](images/tb_ascon2.png)
+*second 128 bit slice of fthe ciphertext*
+![ASCON FSM tb3](images/tb_ascon3.png)
+*tag result*
 
 ## Using `ascon_enc_f` and `ascon_dec_f`
 
