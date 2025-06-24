@@ -824,7 +824,7 @@ Here are the result obtained from the testbench:
 *tag result*
 
 
-## Axi_slave_write
+## Axi_stream_slave
 ![slave_interface](images/arch_axi_slave.png)
 
 
@@ -856,6 +856,8 @@ entity axi_stream_slave is
 			);
 end axi_stream_slave;
 ```
+Inputs from the Dma_in and outputs to Ascon_fsm.
+
 
 ```
 	input_reg: process(clk)
@@ -877,6 +879,7 @@ end axi_stream_slave;
 	end process;
 
 ```
+Istance of the shift register and the input register.
 
 
 ```
@@ -895,6 +898,7 @@ end axi_stream_slave;
 	
 	info_128 <= s_out;
 ```
+Istance of the counter used to count how many 32-bit words arrive, it gets resetted after a 128-bit word gets sent to the Ascon_fsm.
 
 ```
 
@@ -977,7 +981,7 @@ end axi_stream_slave;
 		end if;
 	end process;
 ```
-
+State transition process.
 ```
 
 	output_p: process(state)
@@ -1018,7 +1022,192 @@ end axi_stream_slave;
 		end case;
 	end process;
 ```
+Signal update process.
 
+
+### Flow chart of the state machine
+![Slave interface](images/fsm_axi_slave.png)
+
+
+
+
+## axi_stream_master
+![master_interface](images/arch_axi_master.png)
+
+Interface that handles the communication of the ciphertext to the Dma_out.
+
+When a new 128-bit word of the ciphertext is ready, Ascn_fsm communicates it to the axi_stream_master, and it gets stored in shift_reg once both `data_ready' and 'new_data' are asserted high.
+
+Then, when Dma_out is ready to receive a new 32-bit word, the shift_register will output it.
+
+When the last 128-bit word is sent from the Ascon_fsm to the axi_stream_master, `last_data` will be asserted high, and the axi_stream_interface will assert 'tlast' high during the forth 32-bit word transmission.
+
+```
+entity axi_stream_master is
+	port(	info_128: in std_ulogic_vector(127 downto 0);
+		new_data: in std_ulogic;
+		last_data: in std_ulogic;
+		tready: in std_ulogic;
+		clk: in std_ulogic;
+		aresetn: in std_ulogic;
+		information: out std_ulogic_vector(31 downto 0);
+		tvalid: out std_ulogic;
+		tlast: out std_ulogic;
+		data_ready: out std_ulogic
+			);
+end axi_stream_master;
+```
+
+```
+
+	shift_reg:  process (clk) is
+	variable temp : std_ulogic_vector(127 downto 0);
+	begin
+		if (clk'event and clk='1') then
+			if (reg_e ='1') then
+				temp := info_128;
+			elsif (reg_shift ='1') then
+				temp := x"00000000" & temp(127 downto 32) ;
+			end if;
+			information <= temp(31 downto 0);
+		end if;
+	end process;
+```
+
+```
+	
+   counter: process(clk)
+   begin
+       if rising_edge(clk) then
+           if (count_r = '1') then
+               cnt <= 0;
+           elsif (count_e = '1') then
+					if (cnt < 3) then
+						cnt <= cnt + 1;
+					end if;
+           end if;
+       end if;
+   end process;
+```
+
+```
+	flipflop: process(clk)
+	begin
+		if(clk'event and clk = '1') then
+			if ff_r= '1' then
+				 last_flag <= '0';
+			elsif ff_e = '1'  then
+				 last_flag <= '1';
+			end if;
+		end if;
+	end process;
+```
+
+```
+	state_trans: process (clk)
+	begin
+		if (Clk'event and Clk = '1') then
+			if (aresetn = '0') then
+				state <= idle;
+			else
+				case state is
+					when idle =>
+						state <= ready;
+						
+					when ready =>
+						if (new_data = '1') then
+							if (last_data = '1') then
+								state <= data_rx_last;
+							else
+								state <= data_rx;
+							end if;
+						else
+							state <= ready;
+						end if;
+					
+					when data_rx_last =>
+						state <= data_valid;
+					
+					when data_rx =>
+						state <= data_valid;
+						
+					when data_valid =>
+						if (tready = '1') then
+							state <= shift;
+						else
+							state <= data_valid;
+						end if;
+						
+					when shift =>
+						if (cnt = 2) then
+							if (last_flag = '1') then
+								state <= valid_last;
+							else
+								state <= valid_nolast;
+							end if;
+						else
+							if (tready = '1') then
+								state <= shift;
+							else 
+								state <= data_valid;
+							end if;
+						end if;
+						
+					when valid_last =>
+						state <= idle;
+	
+					when valid_nolast =>
+						state <= idle;
+						
+					when others =>
+						state <= idle;
+				end case;
+			end if;
+		end if;
+	end process;
+```
+
+```
+	output_p: process(state)
+	begin
+		reg_r <= '0';
+		reg_e <= '0';
+		reg_shift <= '0';
+		ff_r <= '0';
+		ff_e <= '1';
+		count_e <= '0';
+		count_r <= '0';
+		tvalid <= '0';
+		tlast <= '0';
+		data_ready <= '0';
+
+		case state is 
+			when idle =>
+				reg_r <= '1';
+				count_r <= '1';
+				ff_r <= '1';
+			when ready =>
+				data_ready <= '1';
+			when data_rx_last =>
+				ff_e <= '1';
+				reg_e <= '1';
+			when data_rx =>
+				reg_e <= '1';
+			when data_valid =>
+				tvalid <= '1';
+			when shift =>
+				reg_shift <= '1';
+				count_e <= '1';
+				tvalid <= '1';
+			when valid_last =>
+				tlast <= '1';
+				tvalid <= '1';
+			when valid_nolast =>
+				tvalid <= '1';
+				
+		end case;
+	end process;
+```
 
 ## The AXI lite control interface
 
