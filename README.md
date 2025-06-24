@@ -1057,9 +1057,9 @@ entity axi_stream_master is
 			);
 end axi_stream_master;
 ```
+Inputs from the Ascon_fsm, output to Dma_out.
 
 ```
-
 	shift_reg:  process (clk) is
 	variable temp : std_ulogic_vector(127 downto 0);
 	begin
@@ -1073,6 +1073,7 @@ end axi_stream_master;
 		end if;
 	end process;
 ```
+Shift register used to store the 128-bit word coming from the Ascon_fsm.
 
 ```
 	
@@ -1089,6 +1090,7 @@ end axi_stream_master;
        end if;
    end process;
 ```
+Counter used to count how many 32-bit words are sent.
 
 ```
 	flipflop: process(clk)
@@ -1102,6 +1104,7 @@ end axi_stream_master;
 		end if;
 	end process;
 ```
+FlipFlop to signal that the current 128-bit word is the last one.
 
 ```
 	state_trans: process (clk)
@@ -1166,6 +1169,7 @@ end axi_stream_master;
 		end if;
 	end process;
 ```
+State update process.
 
 ```
 	output_p: process(state)
@@ -1208,6 +1212,10 @@ end axi_stream_master;
 		end case;
 	end process;
 ```
+Signal update process.
+
+### Flow chart of the state machine
+![Master interface](images/fsm_axi_master.png)
 
 ## The AXI lite control interface
 
