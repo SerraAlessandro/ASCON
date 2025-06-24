@@ -261,6 +261,8 @@ make ascon_pkg_sim.sim
 
 `ascon_fsm.vhd` contains the code of the actual hardware accelerator that performs the encryption, it works for `1`, `2`, `4` permutations per clock cycle, the `8` case still needs to be implemented.
 
+### Code explanation
+
 ```
 entity ASCON_fsm is
 	generic( n_perm : natural := 1);
@@ -736,10 +738,62 @@ Process that handles the state update of the machine.
 
 Process that handles the signal update.
 
+### Flow chart of the state machine
+
+![ASCON FSM fsm1](images/fsm1.png)
+![ASCON FSM fsm2](images/fsm2.png)
+
+The transition between one rectangle and another ( or the same one in case of a loop) represent one clock cycle, while the conditions inside the diamonds happen instantaneously.
+
+So, at the rising edge of the clock, the fsm updates its state, then the conditions inside the diamonds connected to the state get tested, and at the next rising edge of the clock, the state gets updated.
+
+### Simulation of ASCON_fsm
+
+`tb_ascon_fsm.vhd` has been used to perform a **not exhaustive** simulation of the behavior of `ascon_fsm.vhd`. It tests some possible working condition of the hardware, and it is structured as follows:
+
+```
+--------------------------------------------------------------------------------
+-- to test:
+-- ad: 45bc627ad055be54fa4393fed679041245bc627ad055beb5fa4397fed9790a
+-- pt: feb45ab41265432cde653dfeda543f4547658136513ad436778fedc9875430
+
+axi_stream_input <= 	x"45bc627ad055be54fa4393fed6790412" after 510 ns,
+			x"45bc627ad055beb5fa4397fed9790a01" after 2000 ns, 
+			x"feb45ab41265432cde653dfeda543f45" after 2500 ns,
+			x"47658136513ad436778fedc987543001" after 3000 ns;
+
+s0_new_data <= '0', '1' after 730 ns, '0' after 800 ns, '1' after 2050 ns, '0' after 2100 ns, '1' after 2550 ns, '0' after 2600 ns, '1' after 3050 ns, '0' after 3100 ns, '1' after 3550 ns;
+s0_last_data <= '0', '1' after 2000 ns, '0' after 2400 ns, '1' after 3000 ns;
+s0_no_data <= '0';
+m0_data_ready <= '0', '1' after 2100 ns;
+tag_ready <= '0', '1' after 4700 ns;
 
 
+-----------------------------------------------------------------------------------
+---- to test:
+---- ad: no ad
+---- pt: feb45ab41265432cde653dfeda543f4547658136513ad436778fedc9875430
 
+--axi_stream_input <= 	 x"feb45ab41265432cde653dfeda543f45" after 2500 ns,
+--			x"47658136513ad436778fedc987543001" after 3000 ns;
 
+--s0_new_data <= '0', '1' after 2550 ns, '0' after 2600 ns, '1' after 3050 ns, '0' after 3100 ns, '1' after 3550 ns;
+--s0_last_data <= '0', '1' after 2000 ns, '0' after 2250 ns, '1' after 3000 ns;
+--s0_no_data <= '1', '0' after 240 ns;
+--m0_data_ready <= '0', '1' after 2100 ns;
+--tag_ready <= '0', '1' after 4700 ns;
+
+------------------------------------------------------------------------------------
+```
+
+There are two blocks:
+- by commenting the second block and un-commenting the first one, there will be a simulation running for both **ad and pl 256 bits wide**, and the timing is set in a way that allows to test 1, 2 and 4 permutations per clock cycle.
+- by commenting the first block and un-commenting the second one, there will be a simulation running for the **“no ad”** case, and **pl 256 bits wide**, and the timing is set so that it only works for 4 permutations per clock cycle
+
+When `tag_valid` is asserted to '1', then the value of **Tag** is ready in the output `tag`.
+
+when `m0_new_data` is asserted to '1', then the current 128 bit slice of the **Cyphertext** is ready in the output `axi_stream_output`.
+ 
 
 
 ## Using `ascon_enc_f` and `ascon_dec_f`
