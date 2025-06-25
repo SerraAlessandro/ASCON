@@ -935,6 +935,7 @@ Here are the result obtained from the testbench:
 ![ASCON FSM tb3](images/tb_ascon3.png)
 *tag result*
 
+Once the hardware accelerator will be used on the board, in case the length of the associated data and the plaintext is not a multiple of 128 bits, their **padding will be handled entirely by software**, so it is supposed that the hardware accelerator will only receive an integer number of 128-bit words.
 
 # Axi_stream_slave
 ![slave_interface](images/arch_axi_slave.png)
