@@ -1,14 +1,10 @@
-Side-channel attacks on ASCON hardware accelerator
+# Masking of the ASCON cryptographic algorithm
 
----
+Side-channel attacks exploit the power consumption or the electromagnetic emissions of hardware components during operations to retrieve embedded secrets, like secret keys, passwords, etc. Masking consists in randomizing computations to protect cryptographic operations against such attacks.
+The goal of the project is to implement in VHDL a hardware accelerator for a cryptographic algorithm (ASCON), map it in a FPGA, and attack it. Then, a masked version will be designed, attacked and compared with the unprotected version. Finally, ways to automate the masking will be investigated.
 
-[TOC]
 
----
-
-# ASCON
-
-## Building the C reference model
+# Building the C reference model
 
 ```bash
 git pull
@@ -25,7 +21,7 @@ Known Answer Tests results should be in `build/build/LWC_AEAD_KAT_128_128.txt`
 
 The C reference results will be used to test the encryption and decryption functions inside the Ascon package
 
-## Ascon package
+# Ascon package
 The file ascon_pkg.vhd contains the following functions (and procedures): 
 - **single permutation functions**
   
@@ -255,16 +251,16 @@ cd ASCON
 make ascon_pkg_sim.sim
 ```
 
-## The full architecture
+# The full architecture
 ![full architecture](images/full_arch.png)
 
-## Ascon_fsm
+# Ascon_fsm
 
 ![ASCON FSM architecture](images/ascon_fsm_arch.png)
 
 `ascon_fsm.vhd` contains the code of the actual hardware accelerator that performs the encryption, it works for `1`, `2`, `4` permutations per clock cycle, the `8` case still needs to be implemented.
 
-### Code explanation
+## Code explanation
 
 ```
 entity ASCON_fsm is
@@ -838,7 +834,7 @@ It is supposed that once `rstn` becomes '1', then the input **key** and **nonce*
 
 Process that handles the signal update.
 
-### Flow chart of the state machine
+## Flow chart of the state machine
 
 ![ASCON FSM fsm1](images/ascon_fsm_fsm1.png)
 ![ASCON FSM fsm2](images/ascon_fsm_fsm2.png)
@@ -847,7 +843,7 @@ The transition between one rectangle and another ( or the same one in case of a 
 
 So, at the rising edge of the clock, the fsm updates its state, then the conditions inside the diamonds connected to the state get tested, and at the next rising edge of the clock, the state gets updated.
 
-### Simulation of ASCON_fsm
+## Simulation of ASCON_fsm
 
 `tb_ascon_fsm.vhd` has been used to perform a **not exhaustive** simulation of the behavior of `ascon_fsm.vhd`. It tests some possible working condition of the hardware, and it is structured as follows:
 
@@ -903,7 +899,7 @@ vcom -2008 +acc tb_ascon_fsm.vhd
 vsim -voptargs="+acc" tb_ascon_fsm
 
 ```
-### Simulation result
+## Simulation result
 
 From the official python implementation:
 ```
@@ -924,7 +920,7 @@ Here are the result obtained from the testbench:
 *tag result*
 
 
-## Axi_stream_slave
+# Axi_stream_slave
 ![slave_interface](images/arch_axi_slave.png)
 
 
@@ -937,7 +933,7 @@ The interface works as follows:
 - Due to the way the Plaintext is handled by the algorithm, it is necessary to communicate to the Ascon_fsm which 128-bit word is the last, this is done through the `last_data` signal
 - In order to handle the `no Associated data` case, if the Dma_in asserts `tlast` to '1' and it is not the **forth** 32-bit word that gets communicated, then it is considered as the `no Associated data` case 
 
-### Code explanation
+## Code explanation
 
 ```
 entity axi_stream_slave is
@@ -1126,13 +1122,13 @@ State transition process.
 Signal update process.
 
 
-### Flow chart of the state machine
+## Flow chart of the state machine
 ![Slave interface](images/fsm_axi_slave.png)
 
 
 
 
-## axi_stream_master
+# axi_stream_master
 ![master_interface](images/arch_axi_master.png)
 
 Interface that handles the communication of the ciphertext to the Dma_out.
@@ -1315,10 +1311,10 @@ State update process.
 ```
 Signal update process.
 
-### Flow chart of the state machine
+## Flow chart of the state machine
 ![Master interface](images/fsm_axi_master.png)
 
-## The AXI lite control interface
+# The AXI lite control interface
 
 The address mapping of this AXI lite control interface is the following:
 
@@ -1377,6 +1373,19 @@ The layout of the 32-bits STATUS register is the following:
 `ERR_IN` and `ERR_OUT` are cleared-on-set: when writing to `STATUS`, bits of `ERR_IN` and `ERR_OUT` are set to 0 if they are written a 1.
 The other written bits are ignored.
 The reserved bits read as zero.
+
+## Simulation of the AXI lite control interface
+`tb_axi_lite_interface` has been used to perform a ***non exhaustive*** simulation of the behavior of `axi_lite_interface`. The simulation is composed of a series of operations that the interface is supposed to perform, to run the simulation, inside the vhdl folder, compile the files and then simulate with Modelsim:
+
+```
+vcom -2008 +acc axi_lite_interface.vhd
+vcom -2008 +acc tb_axi_lite_interface.vhd
+vsim -voptargs="+acc" tb_axi_lite_interface.vhd
+```
+Here is the result:
+![axi_lite_sim](images/sim_axi_lite.png)
+
+
 
 # ASCON on Zybo
 
