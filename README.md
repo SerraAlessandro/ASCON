@@ -563,6 +563,8 @@ Process that handles the state update of the machine.
 
 It is supposed that once `rstn` becomes '1', then the input **key** and **nonce** are the correct ones, so the machine can start with the processing
 
+Here is an explanation of the states of the fsm:
+
 - **init_first** : the input of the two registers is respectively: key_rev(63 downto 0) & IV, and nonce_rev & key_rev(127 downto 64) respectively.
 
   the register enable is set to '1', meaning that **on the next rising edge of the clock**, the input value of the two registers will be stored and outputted.
@@ -1384,6 +1386,19 @@ vsim -voptargs="+acc" tb_axi_lite_interface.vhd
 ```
 Here is the result:
 ![axi_lite_sim](images/sim_axi_lite.png)
+
+
+# Synthesis result
+By synthesizing the 3 different architectures (1,2,4 permutations per clock cycle), The results are the following:
+
+| Resource         | 1 perm/clk | 2 perm/clk | 4 perm/clk |
+|------------------|------------|------------|------------|
+| Slice LUTs       | 2455 (13.95%) | 3043 (17.29%) | 4534 (25.76%) |
+| Slice Registers  | 2057          | 2056          | 2057          |
+
+The percentages of usage suggest that the synthesizer is properly designing the permutation block because from the `1 ppc` to the `2 ppc` case, there is a percentage increment of around **3.5%**, and from `1 ppc` to `4 ppc` there is a percentage increment of around **11.5%**, following a linear behavior.
+
+The `1 ppc` and `2 ppc` architectures are able to work with a 100+ Mhz clock frequency, while the maximum frequency for the `4 ppc` is estimated to be around 40 Mhz.
 
 
 
