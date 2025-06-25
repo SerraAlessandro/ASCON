@@ -562,6 +562,48 @@ Combinatorial circut that perform n_perm permutations, and the constant of each 
 
 Process that handles the state update of the machine.
 
+It is supposed that once `rstn` becomes '1', then the input **key** and **nonce** are the correct ones, so the machine can start with the processing
+
+- **init_first** : the input of the two registers is respectively: key_rev(63 downto 0) & IV, and nonce_rev & key_rev(127 downto 64) respectively.
+
+  the register enable is set to '1', meaning that **on the next rising edge of the clock**, the input value of the two registers will be stored and outputted.
+
+- **init** : state in which most of the permutation rounds are handled, the register enable are set to '1', the selectors of the two 4-to-1 multiplexers are set to "00", meaning that the output of the 	permutation block will be fed back to the register.
+
+  The counter enable is set to '1', meaning that the value of the cnt will be increased **on the next rising edge of the clock**.
+
+- **last_init** : this state is entered when `cnt = (12/n_perm) - 2` so, for example, if n_perm = 1 then the state is enterd when cnt = 10.
+
+  -1 because the first permutation round gets executed on the next rising edge after **init_first**, because  `key_rev(63 downto 0) & IV` and `nonce_rev & key_rev(127 downto 64)` will be on the output of the register and cnt will be equal to 0.
+
+  The other -1 comes from the fact that inside the **init** state, the enable of the counter and registers gets put to '1', but only **on the next rising_edge of the clock** the count will be increased and the values stored inside the registers. So, if n_perm = 1 and cnt = 10, as soon as the next rising edge of the clock happen, cnt = 11 and the input of the registers will be stored one more time.
+
+  Basically this means that the last permutation round gets executed once the **last_init** state is entered.
+
+  So, in total, it is necessary to subtract 2 to 12/n_perm.
+
+  In the **last_init** state, the result of the last permutation round gets stored, `cnt_r` is set to '1', meaning that **on the next rising_edge of the clock** the cnt will return to 0, and the `ff_ed_e` is set to '1', meaning that **on the next risng?edge of the clock**, `first_ad` becomes '1'.
+
+- **ad_request** : `s0_dat_req` is set to '1', meaning that the ***ascon_fsm*** is requesting data from the ***axi_stream_slave*** and `rnd` is set to 8 and it will stay like that until the end of the plaintext handling.
+  The fsm is now waiting for the ***axi_stream_slave*** response, that will be composed of: `s0_no_data` and `s0_new_data`.
+
+  If `s0_no_data` is asserted high, then it means that this is the **no associated data** case, so the state becomes **end_init_noad**.
+
+  If `s0_no_data` is low and `s0_new_data` is asserted high, then it means that there is a 128-bit associated data word ready to be processed.
+
+  It is still necessary to check if this is the first 128-bit associated data word that gets processed, in order to perform the last XOR operation of the initialization part, which is key_rev(127 downto 0) & x"0000000000000000" XOR mux_p192. So if first_ad is high, then the state will become **ad_1_first**.
+
+
+
+  
+
+
+
+
+
+
+
+
 ```
 	output_p: process(state)
 	begin
