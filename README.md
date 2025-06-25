@@ -256,11 +256,11 @@ make ascon_pkg_sim.sim
 ```
 
 ## The full architecture
-![full architecture](images/)
+![full architecture](images/full_arch)
 
 ## Ascon_fsm
 
-![ASCON FSM architecture](images/ascon_fsm.png)
+![ASCON FSM architecture](images/ascon_fsm_arch.png)
 
 `ascon_fsm.vhd` contains the code of the actual hardware accelerator that performs the encryption, it works for `1`, `2`, `4` permutations per clock cycle, the `8` case still needs to be implemented.
 
@@ -840,8 +840,8 @@ Process that handles the signal update.
 
 ### Flow chart of the state machine
 
-![ASCON FSM fsm1](images/fsm1.png)
-![ASCON FSM fsm2](images/fsm2.png)
+![ASCON FSM fsm1](images/ascon_fsm_fsm1.png)
+![ASCON FSM fsm2](images/ascon_fsm_fsm2.png)
 
 The transition between one rectangle and another ( or the same one in case of a loop) represent one clock cycle, while the conditions inside the diamonds happen instantaneously.
 
