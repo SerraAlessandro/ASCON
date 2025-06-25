@@ -8,7 +8,7 @@
 - [The full architecture](#the-full-architecture)
 - [Ascon_fsm](#ascon_fsm)
 - [Axi_stream_slave](#axi_stream_slave)
-- [axi_stream_master](#axi_stream_master)
+- [Axi_stream_master](#axi_stream_master)
 - [The AXI lite control interface](#the-axi-lite-control-interface)
 - [Synthesis result](#synthesis-result)
 - [ASCON on Zybo](#ascon-on-zybo)
