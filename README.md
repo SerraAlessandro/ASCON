@@ -1415,7 +1415,17 @@ The percentages of usage suggest that the synthesizer is properly designing the 
 
 The `1 ppc` and `2 ppc` architectures are able to work with a 100+ Mhz clock frequency, while the maximum frequency for the `4 ppc` is estimated to be around 40 Mhz.
 
+To run the synthesis:
+```
+ds=~/Desktop/ascon/ASCON NEED TO CHANGE THE PATH
+syn=/tmp/$USER/ds/syn
 
+rm -rf "$syn"/zybo
+mkdir -p "$syn"/zybo
+cd "$syn"/zybo
+vivado -mode batch -source "$ds"/vhdl/top_for_zybo.syn.tcl -notrace
+
+```
 
 # ASCON on Zybo
 
