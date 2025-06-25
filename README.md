@@ -1,5 +1,19 @@
 # Masking of the ASCON cryptographic algorithm
 
+## Index
+
+- [Masking of the ASCON cryptographic algorithm](#masking-of-the-ascon-cryptographic-algorithm)
+- [Building the C reference model](#building-the-c-reference-model)
+- [Ascon package](#ascon-package)
+- [The full architecture](#the-full-architecture)
+- [Ascon_fsm](#ascon_fsm)
+- [Axi_stream_slave](#axi_stream_slave)
+- [axi_stream_master](#axi_stream_master)
+- [The AXI lite control interface](#the-axi-lite-control-interface)
+- [Synthesis result](#synthesis-result)
+- [ASCON on Zybo](#ascon-on-zybo)
+
+
 Side-channel attacks exploit the power consumption or the electromagnetic emissions of hardware components during operations to retrieve embedded secrets, like secret keys, passwords, etc. Masking consists in randomizing computations to protect cryptographic operations against such attacks.
 The goal of the project is to implement in VHDL a hardware accelerator for a cryptographic algorithm (ASCON), map it in a FPGA, and attack it. Then, a masked version will be designed, attacked and compared with the unprotected version. Finally, ways to automate the masking will be investigated.
 
@@ -569,7 +583,7 @@ Here is an explanation of the states of the fsm:
 
   the register enable is set to '1', meaning that **on the next rising edge of the clock**, the input value of the two registers will be stored and outputted.
 
-- **init** : state in which most of the permutation rounds are handled, the register enable are set to '1', the selectors of the two 4-to-1 multiplexers are set to "00", meaning that the output of the 	permutation block will be fed back to the register.
+- **init** : state in which most of the permutation rounds are handled, the register enable are set to '1', the selectors of the two 4-to-1 multiplexers are set to "00", meaning that the output of the permutation block will be fed back to the register.
 
   The counter enable is set to '1', meaning that the value of the cnt will be increased **on the next rising edge of the clock**.
 
@@ -577,13 +591,13 @@ Here is an explanation of the states of the fsm:
 
   -1 because the first permutation round gets executed on the next rising edge after **init_first**, because  `key_rev(63 downto 0) & IV` and `nonce_rev & key_rev(127 downto 64)` will be on the output of the register and cnt will be equal to 0.
 
-  The other -1 comes from the fact that inside the **init** state, the enable of the counter and registers gets put to '1', but only **on the next rising_edge of the clock** the count will be increased and the values stored inside the registers. So, if n_perm = 1 and cnt = 10, as soon as the next rising edge of the clock happen, cnt = 11 and the input of the registers will be stored one more time.
+  The other -1 comes from the fact that inside the **init** state, the enable of the counter and registers gets put to '1', but only **on the next rising edge of the clock** the count will be increased and the values stored inside the registers. So, if n_perm = 1 and cnt = 10, as soon as the next rising edge of the clock happen, cnt = 11 and the input of the registers will be stored one more time.
 
   Basically this means that the last permutation round gets executed once the **last_init** state is entered.
 
   So, in total, it is necessary to subtract 2 to 12/n_perm.
 
-  In the **last_init** state, the result of the last permutation round gets stored, `cnt_r` is set to '1', meaning that **on the next rising_edge of the clock** the cnt will return to 0, and the `ff_ed_e` is set to '1', meaning that **on the next risng?edge of the clock**, `first_ad` becomes '1'.
+  In the **last_init** state, the result of the last permutation round gets stored, `cnt_r` is set to '1', meaning that **on the next rising edge of the clock** the cnt will return to 0, and the `ff_ed_e` is set to '1', meaning that **on the next risng edge of the clock**, `first_ad` becomes '1'.
 
 - **ad_request** : `s0_dat_req` is set to '1', meaning that the ***ascon_fsm*** is requesting data from the ***axi_stream_slave*** and `rnd` is set to 8 and it will stay like that until the end of the plaintext handling.
   The fsm is now waiting for the ***axi_stream_slave*** response, that will be composed of: `s0_no_data` and `s0_new_data`.
