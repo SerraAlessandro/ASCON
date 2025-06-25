@@ -1396,7 +1396,7 @@ By synthesizing the 3 different architectures (1,2,4 permutations per clock cycl
 | Slice LUTs       | 2455 (13.95%) | 3043 (17.29%) | 4534 (25.76%) |
 | Slice Registers  | 2057          | 2056          | 2057          |
 
-The percentages of usage suggest that the synthesizer is properly designing the permutation block because from the `1 ppc` to the `2 ppc` case, there is a percentage increment of around **3.5%**, and from `1 ppc` to `4 ppc` there is a percentage increment of around **11.5%**, following a linear behavior.
+The percentages of usage suggest that the synthesizer is properly designing the permutation block because from the `1 ppc` to the `2 ppc` case, there is a percentage increment of around **3.5%**, and from `1 ppc` to `4 ppc` there is a percentage increment of around **11.5%**, following an almost linear behavior.
 
 The `1 ppc` and `2 ppc` architectures are able to work with a 100+ Mhz clock frequency, while the maximum frequency for the `4 ppc` is estimated to be around 40 Mhz.
 
