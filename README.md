@@ -593,8 +593,37 @@ It is supposed that once `rstn` becomes '1', then the input **key** and **nonce*
 
   It is still necessary to check if this is the first 128-bit associated data word that gets processed, in order to perform the last XOR operation of the initialization part, which is key_rev(127 downto 0) & x"0000000000000000" XOR mux_p192. So if first_ad is high, then the state will become **ad_1_first**.
 
+- **end_init_noad** : There is no associated data, so the only thing left to do before processing the plaintext is to perform the last XOR operation.
 
+  The XOR operation involves only the 192-bit part of the state, so for the 128-bit part, the 4-to-1 mux selector is set to "00", meaning loop back (and sel_out are set to '1', meaning we are not interested in the output of the permutations block.
 
+  Instead, for the 192-bit part, the 4-to-1 mux is set to "01", and at the same time ad_last is set to '1', this will also perform the very last operation of the associated data processing ( the XOR operation on the MSB).
+
+- **ad_1_first** : State that handles the **first** permutation block for the **first** 128-bit associated data word, this is a special case because it is still needed to perform the XOR of the 192-bit part with key_rev(127 downto 0) & x"0000000000000000".
+
+  To do so, `sel_128` is set to "10", meaning that the (128-bit part XOR A0) is performed.
+
+  `sel_192` is set to "01" to perform the XOR of the 192-bit part with key_rev(127 downto 0) & x"0000000000000000".
+
+  Register enables are set high, and both `sel_out_128` and `sel_out_192` are set high, meaning that the value saved in the registers will simply be the result of the XOR operations.
+
+  Finally, `ff_ad_r` is set to '1', meaning that `first_ad` will become '0' on the next rising_edge and this state will not be entered again until the machine returns to idle.
+
+- **ad_first** : State that handles the  **first** permutation block for **all except the first** 128-bit associated data words, if present.
+
+    In this case, the only operation performed is the XOR on the 128-bit part of the current saved value
+
+- **ad** : state in which majority of the permutation rounds for the associated data are executed, same structure as **init**, but this time, the state change when `cnt = (8/n_perm) - 2`.
+
+  It is also necessary to check the logical value of `s0_last_data`, to understand if the 128-bit associated data word that has been just processed was the last one.
+
+  Notice that `s0_last_data` will remain high until the `s0_data_ack` is asserted high by the ***ascon_fsm***.
+
+- **ad_ack** : once a 128-bit associated data word gets processed, ***ascon_fsm*** communicates to ***axi_stream_slave*** that it has finished and it is ready to receive another 128-bit associated data word, if present. This is done by asserting `s0_data_ack` high.
+
+  Additionally, `cnt_r` is set high in order to reset the cnt and start over.
+
+  It is necessary to also assert `e_128` and `e_192` high, for the same reason of **last_init**.
   
 
 
