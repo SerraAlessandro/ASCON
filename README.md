@@ -625,7 +625,33 @@ It is supposed that once `rstn` becomes '1', then the input **key** and **nonce*
 
   It is necessary to also assert `e_128` and `e_192` high, for the same reason of **last_init**.
   
+- **last_ad** : Conclusion of the associated data part, the '1' XOR MSB operation is performed, aswell as setting `s0_data_ack` and `cnt_r` to '1'.
 
+- **pl_request** : same behavior as **ad_request**.
+
+  It is necessary to check if a new 128-bit word is ready from the ***axi_stream_slave***, by looking at `s0_new_data`, then it is necessary to check if ***axi_stream_master*** is ready to receive a new 128-bit ciphertext word, by looking at `m0_data_ready`.
+
+  Finally, it is necessary to check if the current 128-bit plaintext word that needs to be processed is the last one, since the algorithm handles the last part of the plaintext differently. To do so, the value of `s0_last_data` is checked.
+
+- **wait1** : the machine enters this state in case the ***axi_stream_master*** is not ready to receive a new 128-bit ciphertext word, and it remains in this state until ***axi_stream_master*** is ready.
+
+ - **data_send** : the machine enter this state when the current 128-bit plaintext word that is getting processed is **not** the last one. In this state, the 128-bit ciphertext word corresonding to the current 128-bit plaintext word get sent to the ***axi_stream_master***.
+
+ - **pl_first** : similar behavior as **ad_first**.
+
+ - **pl** : similar behavior as **ad**.
+
+ - **wait_pl** : state needed at the end of the processing of the current 128-bit plaintext word in order to store the result of the last permutation round.
+
+ - **data_send_last** : the machine enters this state in case the current 128-bit plaintext word that needs to be processed is the last one, in that case, it's needed to cammunicate it to the ***axi_stream_master*** by asserting `m0_last_data` high
+
+ - **fin_first** : handling of the XOR operation that divides plaintext and finalization parts of the algorithm, and processing of the last 128-bit plaintext word
+
+ - **fin** : state that handles the permutation rounds for the finalization, the machine stays in this state until `cnt = (12/n_perm) - 2`
+
+ - **write_t** : once the tag is ready to be sent, the machine enters this state, and it is not leaved untill ***axi_lite_interfaces*** reads the tag.
+    
+  
 
 
 
