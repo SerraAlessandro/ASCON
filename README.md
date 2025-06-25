@@ -346,7 +346,7 @@ Inside the architecture, the inputs and outputs of ASCON_fsm get byte reversed. 
 	end process reg_192;
 ```
 
-instantiation of the registers that provide the input to the ascon permutations.
+instance of the registers that provide the input to the ascon permutations.
 
 ```
 	ff_ad: process(clk)
@@ -361,7 +361,7 @@ instantiation of the registers that provide the input to the ascon permutations.
 	end process ff_ad;
 ```
 
-Flip flop instantiation needed to perform the pass from Initialization to Associated Data
+Flip flop instance needed to perform the pass from Initialization to Associated Data
 
 ```
 	counter: process(clk)
@@ -380,7 +380,7 @@ Flip flop instantiation needed to perform the pass from Initialization to Associ
    end process counter;
 ```
 
-Instantiation of the counter that provides the proper value to the permutation block, to handle the choice of the constants of the permutation.
+Instance of the counter that provides the proper value to the permutation block, to handle the choice of the constants of the permutation.
 
 ```
 reg128_in <= 	key_rev(63 downto 0) & x"00001000808c0001" when sel_128 = "11" else 
