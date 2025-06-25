@@ -256,7 +256,7 @@ make ascon_pkg_sim.sim
 ```
 
 ## The full architecture
-![full architecture](images/full_arch)
+![full architecture](images/full_arch.png)
 
 ## Ascon_fsm
 
